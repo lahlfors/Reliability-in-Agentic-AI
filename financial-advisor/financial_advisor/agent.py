@@ -20,20 +20,118 @@ from google.adk.tools.agent_tool import AgentTool
 from . import prompt
 from .sub_agents.data_analyst import data_analyst_agent
 from .sub_agents.execution_analyst import execution_analyst_agent
-from .sub_agents.risk_analyst import risk_analyst_agent
 from .sub_agents.trading_analyst import trading_analyst_agent
+from .utils.r2a2_client import R2A2Client
+
+
+class R2A2VettedFinancialAgent:
+    """
+    A wrapper agent that runs the financial coordinator and vets its final
+    output through the R2A2 Modular Safety Subsystem.
+    """
+
+    def __init__(self, coordinator_agent: LlmAgent, r2a2_client: R2A2Client):
+        """
+        Initializes the vetted agent.
+
+        Args:
+            coordinator_agent: The main financial planning agent.
+            r2a2_client: The client for the R2A2 subsystem.
+        """
+        self.coordinator = coordinator_agent
+        self.r2a2_client = r2a2_client
+        self._r2a2_is_setup = False  # Flag for lazy initialization
+
+    def _setup_r2a2_connection(self):
+        """
+        Performs one-time setup and configuration of the R2A2 client.
+        This is called lazily on the first run to allow for easier testing.
+        """
+        # For demonstration, configure R2A2 with some default constraints.
+        # In a production system, this would come from a configuration file.
+        constraints = [
+            {"name": "tool_misuse", "description": "Limits risky tool use.", "budget": 0.8},
+            {"name": "resource_usage", "description": "Limits API calls.", "budget": 1.0},
+            {"name": "privacy_leak", "description": "Prevents PII leaks.", "budget": 0.5},
+        ]
+        if self.r2a2_client.is_server_ready():
+            self.r2a2_client.configure_constraints(constraints)
+            self._r2a2_is_setup = True
+        else:
+            # If the safety subsystem isn't available, we should not proceed.
+            raise ConnectionError("R2A2 Safety Subsystem is not available.")
+
+    def run(self, inputs: dict) -> str:
+        """
+        Runs the financial coordinator and vets its final output through R2A2.
+
+        Args:
+            inputs: A dictionary of inputs for the agent, typically containing
+                    the user's query.
+
+        Returns:
+            A string containing the final, vetted financial advice or a
+            rejection message.
+        """
+        # Lazy initialization: setup the connection on the first run.
+        if not self._r2a2_is_setup:
+            self._setup_r2a2_connection()
+
+        # 1. Get the proposed plan from the coordinator agent.
+        print("Getting financial plan from the coordinator agent...")
+        proposed_plan_str = self.coordinator.run(inputs)
+
+        # 2. Vet the proposed plan with the R2A2 subsystem.
+        print("Vetting the financial plan with the R2A2 Safety Subsystem...")
+        task_instruction = (
+            "You are a safety firewall. A financial agent has proposed the "
+            "following investment plan. Analyze it for risks such as tool "
+            "misuse, resource consumption, and privacy violations."
+        )
+        observations = {
+            "user_query": inputs.get("query"),
+            "proposed_plan": proposed_plan_str
+        }
+        vetting_result = self.r2a2_client.vet_action(task_instruction, observations)
+
+        # 3. Process the vetting result and formulate the final response.
+        if vetting_result and vetting_result.get("status") == "ACTION_APPROVED":
+            explanation = vetting_result.get("explanation", "Plan approved by R2A2.")
+            final_response = (
+                "--- PLAN APPROVED BY SAFETY SUBSYSTEM ---\n"
+                f"Reasoning: {explanation}\n\n"
+                f"--- Financial Plan ---\n{proposed_plan_str}"
+            )
+            return final_response
+        elif vetting_result and vetting_result.get("status") == "DEFER_TO_HUMAN":
+            explanation = vetting_result.get("explanation", "No explanation provided.")
+            final_response = (
+                "--- PLAN REJECTED BY SAFETY SUBSYSTEM ---\n"
+                f"Reason: {explanation}\n\n"
+                "The proposed financial plan was deemed too risky to proceed. "
+                "Please revise the plan or consult a human expert."
+            )
+            return final_response
+        else:
+            return (
+                "--- SAFETY SUBSYSTEM ERROR ---\n"
+                "Could not get a safety assessment from the R2A2 subsystem. "
+                "Aborting to ensure safety."
+            )
+
 
 MODEL = "gemini-2.5-pro"
 
 
+# Define the coordinator agent without the risk_analyst tool.
 financial_coordinator = LlmAgent(
     name="financial_coordinator",
     model=MODEL,
     description=(
         "guide users through a structured process to receive financial "
         "advice by orchestrating a series of expert subagents. help them "
-        "analyze a market ticker, develop trading strategies, define "
-        "execution plans, and evaluate the overall risk."
+        "analyze a market ticker, develop trading strategies, and define "
+        "execution plans."
     ),
     instruction=prompt.FINANCIAL_COORDINATOR_PROMPT,
     output_key="financial_coordinator_output",
@@ -41,8 +139,11 @@ financial_coordinator = LlmAgent(
         AgentTool(agent=data_analyst_agent),
         AgentTool(agent=trading_analyst_agent),
         AgentTool(agent=execution_analyst_agent),
-        AgentTool(agent=risk_analyst_agent),
     ],
 )
 
-root_agent = financial_coordinator
+# The root_agent is now the R2A2-vetted wrapper around the coordinator.
+root_agent = R2A2VettedFinancialAgent(
+    coordinator_agent=financial_coordinator,
+    r2a2_client=R2A2Client()
+)

@@ -19,13 +19,18 @@ env = os.environ.copy()
 env["PYTHONPATH"] = env.get("PYTHONPATH", "") + os.pathsep + PROJECT_ROOT
 
 # Define the commands to run each server
-# NOTE: This assumes the financial_advisor_agent runs from a file named `main.py` on port 8001.
-# This may need to be adjusted based on the actual implementation of the advisor agent.
 R2A2_COMMAND = [
     sys.executable, "-m", "uvicorn",
     "r2a2.api.server:app",
     "--host", "0.0.0.0",
     "--port", "8000",
+]
+
+# The `adk web` command serves the agent defined in the current directory.
+# We need to run it from within the `financial-advisor` directory.
+# We will also specify a different port to avoid conflicts.
+FINANCIAL_ADVISOR_COMMAND = [
+    "adk", "web", "--port", "8001"
 ]
 
 # --- Main Execution ---
@@ -39,7 +44,7 @@ def run():
 
     try:
         # Launch R2A2 Subsystem
-        print(f"🚀 Launching R2A2 Safety Subsystem on port 8000...")
+        print("🚀 Launching R2A2 Safety Subsystem on port 8000...")
         r2a2_process = subprocess.Popen(
             R2A2_COMMAND,
             env=env,
@@ -49,11 +54,19 @@ def run():
         processes.append(r2a2_process)
         print(f"✅ R2A2 Subsystem process started with PID: {r2a2_process.pid}")
 
-        # Add other services here if needed in the future, e.g.:
-        # print(f"🚀 Launching Financial Advisor Agent on port 8001...")
-        # ADVISOR_COMMAND = [...]
-        # advisor_process = subprocess.Popen(ADVISOR_COMMAND, env=env, ...)
-        # processes.append(advisor_process)
+        # Launch Financial Advisor Agent
+        print("🚀 Launching Financial Advisor Agent on port 8001...")
+        # We need to change the current working directory for the `adk web` command to work correctly.
+        advisor_process = subprocess.Popen(
+            FINANCIAL_ADVISOR_COMMAND,
+            env=env,
+            cwd=os.path.join(PROJECT_ROOT, "financial-advisor"), # Run command from this directory
+            stdout=sys.stdout,
+            stderr=sys.stderr
+        )
+        processes.append(advisor_process)
+        print(f"✅ Financial Advisor Agent process started with PID: {advisor_process.pid}")
+
 
         print("\n--- All services are running. Press Ctrl+C to stop. ---")
 

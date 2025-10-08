@@ -83,7 +83,7 @@ class R2A2VettedFinancialAgent(BaseAgent):
         # 1. Get the proposed plan from the coordinator agent asynchronously.
         print("Getting financial plan from the coordinator agent...")
         final_event = {}
-        async for event in self.coordinator.run_async(inputs=inputs):
+        async for event in self.coordinator.run_async(**inputs):
             # LlmAgent.run_async yields multiple events; we need the last one.
             if event.get("is_final"):
                 final_event = event

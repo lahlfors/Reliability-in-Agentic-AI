@@ -22,7 +22,7 @@ class R2A2Client:
         self.base_url = base_url
         self.session = httpx.AsyncClient(base_url=self.base_url, timeout=60.0)
 
-    async def is_server_ready(self, timeout: int = 30) -> bool:
+    async def is_server_ready_async(self, timeout: int = 30) -> bool:
         """
         Checks if the R2A2 server is running and responsive by polling its /docs endpoint.
         """
@@ -43,7 +43,7 @@ class R2A2Client:
         print(f"Error: R2A2 server did not become ready within {timeout} seconds.")
         return False
 
-    async def configure_constraints(self, constraints: List[Dict[str, Any]]) -> bool:
+    async def configure_constraints_async(self, constraints: List[Dict[str, Any]]) -> bool:
         """
         Asynchronously configures the safety constraints in the R2A2 subsystem.
         """
@@ -57,7 +57,7 @@ class R2A2Client:
             print(f"Error configuring R2A2 constraints: {e}")
             return False
 
-    async def vet_action(self, task_instruction: str, observations: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    async def vet_action_async(self, task_instruction: str, observations: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
         Asynchronously submits a task and observations to R2A2 for vetting and returns the result.
         """

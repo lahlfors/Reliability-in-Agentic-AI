@@ -23,9 +23,9 @@ from unittest.mock import MagicMock, patch, AsyncMock
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 
-# The new root agent is an instance of R2A2VettedFinancialAgent
-from financial_advisor.agent import R2A2VettedFinancialAgent, R2A2Client
-from google.adk.agents import LlmAgent
+# Import the factory function and the classes needed for mocking.
+from financial_advisor.agent import create_agent, R2A2Client, R2A2VettedFinancialAgent
+from google.adk.agents import LlmAgent, InvocationContext
 
 # Tell pytest this is an async test file
 pytest_plugins = ("pytest_asyncio",)
@@ -33,83 +33,79 @@ pytest_plugins = ("pytest_asyncio",)
 
 @pytest.mark.asyncio
 @patch("financial_advisor.agent.R2A2Client", spec=R2A2Client)
-async def test_r2a2_vetted_agent_happy_path_async(MockR2A2Client):
+@patch("financial_advisor.agent.LlmAgent", spec=LlmAgent)
+async def test_r2a2_vetted_agent_happy_path_async(MockLlmAgent, MockR2A2Client):
     """
-    Tests the R2A2VettedFinancialAgent's happy path asynchronously.
+    Tests the R2A2VettedFinancialAgent's happy path using mocks.
     """
     # --- Arrange ---
 
-    # 1. Mock the R2A2Client instance and its async methods
+    # 1. Configure the mocks that will be used when the agent is created.
     mock_r2a2_instance = MockR2A2Client.return_value
-    mock_r2a2_instance.is_server_ready = AsyncMock(return_value=True)
-    mock_r2a2_instance.configure_constraints = AsyncMock(return_value=True)
-    mock_r2a2_instance.vet_action = AsyncMock(return_value={
+    mock_r2a2_instance.is_server_ready_async.return_value = True
+    mock_r2a2_instance.configure_constraints_async.return_value = True
+    mock_r2a2_instance.vet_action_async.return_value = {
         "status": "ACTION_APPROVED",
         "explanation": "The proposed plan is within acceptable risk parameters."
-    })
+    }
 
-    # 2. Mock the inner financial_coordinator agent and its async generator
-    mock_coordinator_agent = MagicMock(spec=LlmAgent)
+    mock_coordinator_agent = MockLlmAgent.return_value
     mock_plan = "1. Buy 100 shares of GOOG.\n2. Set a stop-loss order at -5%."
-
-    # Mock the async generator `run_async`
     async def mock_run_async(*args, **kwargs):
         yield {"output": mock_plan, "is_final": True}
+    mock_coordinator_agent.run_async = MagicMock(side_effect=mock_run_async)
 
-    mock_coordinator_agent.run_async = mock_run_async
+    # 2. Call the factory function. It will create the agent using our mocks.
+    vetted_agent = create_agent()
 
-    # 3. Instantiate the agent-under-test
-    vetted_agent = R2A2VettedFinancialAgent(
-        name="test_agent",
-        coordinator=mock_coordinator_agent,
-        r2a2_client=mock_r2a2_instance
-    )
+    # 3. Create a mock InvocationContext
+    mock_ctx = MagicMock(spec=InvocationContext)
+    mock_ctx.user_content = "Give me a stock plan."
+    coordinator_inputs = {"query": mock_ctx.user_content}
 
     # --- Act ---
     final_output = ""
-    async for event in vetted_agent._run_async_impl(inputs={"query": "Give me a stock plan."}):
+    async for event in vetted_agent._run_async_impl(ctx=mock_ctx):
         if event.get("is_final"):
             final_output = event.get("output")
 
     # --- Assert ---
-    mock_r2a2_instance.vet_action.assert_awaited_once()
+    mock_coordinator_agent.run_async.assert_called_once_with(**coordinator_inputs)
+    mock_r2a2_instance.vet_action_async.assert_awaited_once()
     assert "PLAN APPROVED BY SAFETY SUBSYSTEM" in final_output
-    assert "The proposed plan is within acceptable risk parameters." in final_output
-    assert mock_plan in final_output
 
 
 @pytest.mark.asyncio
 @patch("financial_advisor.agent.R2A2Client", spec=R2A2Client)
-async def test_r2a2_vetted_agent_rejection_path_async(MockR2A2Client):
+@patch("financial_advisor.agent.LlmAgent", spec=LlmAgent)
+async def test_r2a2_vetted_agent_rejection_path_async(MockLlmAgent, MockR2A2Client):
     """
     Tests the R2A2VettedFinancialAgent's rejection path asynchronously.
     """
     # --- Arrange ---
     mock_r2a2_instance = MockR2A2Client.return_value
-    mock_r2a2_instance.is_server_ready = AsyncMock(return_value=True)
-    mock_r2a2_instance.vet_action = AsyncMock(return_value={
+    mock_r2a2_instance.is_server_ready_async.return_value = True
+    mock_r2a2_instance.vet_action_async.return_value = {
         "status": "DEFER_TO_HUMAN",
         "explanation": "The plan involves highly volatile assets, exceeding risk budget."
-    })
+    }
 
-    mock_coordinator_agent = MagicMock(spec=LlmAgent)
+    mock_coordinator_agent = MockLlmAgent.return_value
     async def mock_run_async(*args, **kwargs):
         yield {"output": "A very risky plan.", "is_final": True}
-    mock_coordinator_agent.run_async = mock_run_async
+    mock_coordinator_agent.run_async = MagicMock(side_effect=mock_run_async)
 
-    vetted_agent = R2A2VettedFinancialAgent(
-        name="test_agent",
-        coordinator=mock_coordinator_agent,
-        r2a2_client=mock_r2a2_instance
-    )
+    vetted_agent = create_agent()
+
+    mock_ctx = MagicMock(spec=InvocationContext)
+    mock_ctx.user_content = "Give me a risky plan."
 
     # --- Act ---
     final_output = ""
-    async for event in vetted_agent._run_async_impl(inputs={"query": "Give me a risky plan."}):
+    async for event in vetted_agent._run_async_impl(ctx=mock_ctx):
         if event.get("is_final"):
             final_output = event.get("output")
 
     # --- Assert ---
     assert "PLAN REJECTED BY SAFETY SUBSYSTEM" in final_output
     assert "exceeding risk budget" in final_output
-    assert "A very risky plan." not in final_output

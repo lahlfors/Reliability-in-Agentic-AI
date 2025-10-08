@@ -14,7 +14,7 @@
 
 """Financial coordinator: provide reasonable investment strategies"""
 
-from google.adk.agents import LlmAgent
+from google.adk.agents import BaseAgent, LlmAgent
 from google.adk.tools.agent_tool import AgentTool
 
 from . import prompt
@@ -24,22 +24,25 @@ from .sub_agents.trading_analyst import trading_analyst_agent
 from .utils.r2a2_client import R2A2Client
 
 
-class R2A2VettedFinancialAgent:
+class R2A2VettedFinancialAgent(BaseAgent):
     """
     A wrapper agent that runs the financial coordinator and vets its final
     output through the R2A2 Modular Safety Subsystem.
     """
+    name: str
+    coordinator: LlmAgent
+    r2a2_client: R2A2Client
 
-    def __init__(self, coordinator_agent: LlmAgent, r2a2_client: R2A2Client):
+    def __init__(self, name: str, coordinator: LlmAgent, r2a2_client: R2A2Client):
         """
-        Initializes the vetted agent.
-
-        Args:
-            coordinator_agent: The main financial planning agent.
-            r2a2_client: The client for the R2A2 subsystem.
+        Initializes the Pydantic BaseModel by calling the parent constructor
+        with the declared fields.
         """
-        self.coordinator = coordinator_agent
-        self.r2a2_client = r2a2_client
+        super().__init__(
+            name=name,
+            coordinator=coordinator,
+            r2a2_client=r2a2_client
+        )
         self._r2a2_is_setup = False  # Flag for lazy initialization
 
     def _setup_r2a2_connection(self):
@@ -144,6 +147,7 @@ financial_coordinator = LlmAgent(
 
 # The root_agent is now the R2A2-vetted wrapper around the coordinator.
 root_agent = R2A2VettedFinancialAgent(
-    coordinator_agent=financial_coordinator,
+    name="r2a2_vetted_financial_agent",
+    coordinator=financial_coordinator,
     r2a2_client=R2A2Client()
 )

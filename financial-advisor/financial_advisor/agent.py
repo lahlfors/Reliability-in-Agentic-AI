@@ -35,40 +35,40 @@ setup_logging()
 # Get a logger for this module
 logger = get_logger(__name__)
 
-logger.info("R2A2VettedFinancialAgent module loading...")
+logger.info("MCSVettedFinancialAgent module loading...")
 
-class R2A2VettedFinancialAgent(LlmAgent):
+class MCSVettedFinancialAgent(LlmAgent):
     """
     A financial agent that extends LlmAgent to incorporate a safety-vetting
     step before producing a final response. It is designed to be robust
     and handle potential failures gracefully.
     """
-    # Declare the custom r2a2_client field using a string forward reference.
-    r2a2_client: "R2A2Client"
-    _r2a2_is_setup: bool = False
+    # Declare the custom mcs_client field using a string forward reference.
+    mcs_client: "MCSClient"
+    _mcs_is_setup: bool = False
 
-    def __init__(self, r2a2_client: "R2A2Client", **kwargs):
+    def __init__(self, mcs_client: "MCSClient", **kwargs):
         """Initializes the vetted agent."""
-        super().__init__(r2a2_client=r2a2_client, **kwargs)
-        self._r2a2_is_setup = False
+        super().__init__(mcs_client=mcs_client, **kwargs)
+        self._mcs_is_setup = False
 
-    async def _setup_r2a2_connection_async(self):
-        """Performs one-time setup and configuration of the R2A2 client."""
-        if self._r2a2_is_setup:
+    async def _setup_mcs_connection_async(self):
+        """Performs one-time setup and configuration of the MCS client."""
+        if self._mcs_is_setup:
             return
-        logger.info("Waiting for R2A2 server to become ready...")
-        if not await self.r2a2_client.is_server_ready_async():
-            raise ConnectionError("R2A2 Safety Subsystem is not available.")
-        logger.info("R2A2 server is ready.")
+        logger.info("Waiting for MCS server to become ready...")
+        if not await self.mcs_client.is_server_ready_async():
+            raise ConnectionError("Metacognitive Control Subsystem is not available.")
+        logger.info("MCS server is ready.")
 
         constraints = [
             {"name": "tool_misuse", "description": "Limits risky tool use.", "budget": 0.8},
             {"name": "resource_usage", "description": "Limits API calls.", "budget": 1.0},
             {"name": "privacy_leak", "description": "Prevents PII leaks.", "budget": 0.5},
         ]
-        await self.r2a2_client.configure_constraints_async(constraints)
-        logger.info("R2A2 constraints configured successfully.")
-        self._r2a2_is_setup = True
+        await self.mcs_client.configure_constraints_async(constraints)
+        logger.info("MCS constraints configured successfully.")
+        self._mcs_is_setup = True
 
     async def _run_async_impl(self, ctx: InvocationContext) -> AsyncIterator[Event]:
         """
@@ -76,7 +76,7 @@ class R2A2VettedFinancialAgent(LlmAgent):
         intercepts the result, vets it, and then yields a final, safe response.
         """
         try:
-            await self._setup_r2a2_connection_async()
+            await self._setup_mcs_connection_async()
         except Exception as e:
             logger.error(f"Error setting up safety system: {e}", exc_info=True)
             yield Event(
@@ -123,42 +123,51 @@ class R2A2VettedFinancialAgent(LlmAgent):
             return
         logger.debug(f"Proposed plan: {proposed_plan_str}")
 
-        logger.info("Vetting the financial plan with the R2A2 Safety Subsystem...")
-        task_instruction = (
-            "You are a safety firewall. A financial agent has proposed the "
-            "following investment plan. Analyze it for risks such as tool "
-            "misuse, resource consumption, and privacy violations."
-        )
-        observations = {
-            "user_query": user_query,
-            "proposed_plan": proposed_plan_str
+        logger.info("Vetting the financial plan with the TDD-aligned Metacognitive Control Subsystem...")
+
+        # Construct the agent_state object for the /deliberate endpoint
+        agent_state = {
+            "goal": user_query,
+            "plan": proposed_plan_str.split('\n'),  # Simple plan representation
+            "memory_buffer": f"User query: {user_query}",  # Simple memory
+            "proposed_action": {
+                "tool_name": "present_financial_plan",
+                "parameters": {
+                    "plan_details": proposed_plan_str
+                }
+            },
+            # Provide tool schemas if available, otherwise an empty list
+            "tool_schemas": [t.definition for t in self.tools] if hasattr(self, 'tools') else []
         }
+
         try:
-            vetting_result = await self.r2a2_client.vet_action_async(task_instruction, observations)
+            # Call the new deliberate_async method
+            deliberation_result = await self.mcs_client.deliberate_async(agent_state)
         except Exception as e:
-            logger.error(f"Error during safety vetting: {e}", exc_info=True)
+            logger.error(f"Error during safety deliberation: {e}", exc_info=True)
             yield Event(
                 author=self.name,
-                content=types.Content(parts=[types.Part(text=f"Error during safety vetting: {e}")]),
+                content=types.Content(parts=[types.Part(text=f"Error during safety deliberation: {e}")]),
                 id=str(uuid.uuid4()),
                 invocation_id=ctx.invocation_id,
                 partial=False
             )
             return
-        logger.debug(f"Vetting result: {vetting_result}")
+        logger.debug(f"Deliberation result: {deliberation_result}")
 
-        if vetting_result and vetting_result.get("status") == "ACTION_APPROVED":
-            explanation = vetting_result.get("explanation", "Plan approved by R2A2.")
+        if deliberation_result and deliberation_result.get("decision") == "EXECUTE":
+            justification = deliberation_result.get("justification", "Plan approved by R2A2.")
             final_response_text = (
                 "--- PLAN APPROVED BY SAFETY SUBSYSTEM ---\n"
-                f"Reasoning: {explanation}\n\n"
+                f"Reasoning: {justification}\n\n"
                 f"--- Financial Plan ---\n{proposed_plan_str}"
             )
         else:
-            explanation = vetting_result.get("explanation", "An unspecified safety concern was raised.")
+            decision = deliberation_result.get('decision', 'UNKNOWN') if deliberation_result else 'ERROR'
+            justification = deliberation_result.get("justification", "An unspecified safety concern was raised.")
             final_response_text = (
-                "--- PLAN REJECTED BY SAFETY SUBSYSTEM ---\n"
-                f"Reason: {explanation}\n\n"
+                f"--- PLAN REJECTED BY SAFETY SUBSYYSTEM (Decision: {decision}) ---\n"
+                f"Reason: {justification}\n\n"
                 "The proposed financial plan was blocked to ensure safety. "
                 "Please refine your request or consult a human expert."
             )
@@ -174,15 +183,15 @@ try:
     from .sub_agents.data_analyst import data_analyst_agent
     from .sub_agents.execution_analyst import execution_analyst_agent
     from .sub_agents.trading_analyst import trading_analyst_agent
-    from .utils.r2a2_client import R2A2Client
+    from .utils.mcs_client import MCSClient
 
     # After importing the necessary classes, tell Pydantic to resolve
     # the string-based forward references in our agent class.
-    R2A2VettedFinancialAgent.model_rebuild()
+    MCSVettedFinancialAgent.model_rebuild()
 
     logger.info("Attempting to create root_agent instance...")
     # The `adk web` command requires a module-level variable named `root_agent`.
-    root_agent = R2A2VettedFinancialAgent(
+    root_agent = MCSVettedFinancialAgent(
         name="financial_coordinator",
         model="gemini-1.5-pro",
         description=(
@@ -194,7 +203,7 @@ try:
             AgentTool(agent=trading_analyst_agent),
             AgentTool(agent=execution_analyst_agent),
         ],
-        r2a2_client=R2A2Client()
+        mcs_client=MCSClient()
     )
     logger.info("root_agent instance created successfully.")
 except Exception as e:

@@ -1,14 +1,15 @@
 """
 Asynchronous client for interacting with the R2A2 Modular Safety Subsystem API.
+(Updated to support the TDD-aligned /deliberate endpoint)
 """
 
 import httpx
 import asyncio
 from typing import Dict, Any, List, Optional
 
-class R2A2Client:
+class MCSClient:
     """
-    An asynchronous client for interacting with the R2A2 Modular Safety Subsystem API.
+    An asynchronous client for interacting with the Metacognitive Control Subsystem API.
     Uses httpx.AsyncClient for non-blocking HTTP requests.
     """
 
@@ -57,35 +58,28 @@ class R2A2Client:
             print(f"Error configuring R2A2 constraints: {e}")
             return False
 
-    async def vet_action_async(self, task_instruction: str, observations: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    async def deliberate_async(
+        self,
+        agent_state: Dict[str, Any],
+        observation: Optional[str] = None,
+        policy_constraints: Optional[List[str]] = None
+    ) -> Optional[Dict[str, Any]]:
         """
-        Asynchronously submits a task and observations to R2A2 for vetting and returns the result.
+        Asynchronously submits the full agent state to the /deliberate endpoint
+        for a comprehensive metacognitive decision.
         """
-        perceive_url = "/perceive"
-        get_action_url = "/getAction"
-
+        url = "/deliberate"
+        payload = {
+            "agent_state": agent_state,
+            "observation": observation,
+            "policy_constraints": policy_constraints or [],
+        }
         try:
-            # Step 1: Perceive
-            perceive_payload = {
-                "task_instruction": task_instruction,
-                "observations": observations,
-            }
-            perceive_response = await self.session.post(perceive_url, json=perceive_payload)
-            perceive_response.raise_for_status()
-            transaction_id = perceive_response.json().get("transaction_id")
-
-            if not transaction_id:
-                print("Error: Did not receive a transaction_id from /perceive.")
-                return None
-
-            # Step 2: Get Action
-            action_response = await self.session.get(get_action_url, params={"transaction_id": transaction_id})
-            action_response.raise_for_status()
-
-            return action_response.json()
-
+            response = await self.session.post(url, json=payload)
+            response.raise_for_status()
+            return response.json()
         except httpx.RequestError as e:
-            print(f"Error during R2A2 action vetting: {e}")
+            print(f"Error during R2A2 deliberation: {e}")
             return None
 
     async def close(self):

@@ -17,7 +17,8 @@
 import logging
 from google.adk import Agent
 from google.adk.tools import google_search
-from observability import get_logger
+from observability.observability.logging_config import get_logger
+
 
 from . import prompt
 

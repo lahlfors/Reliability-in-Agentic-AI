@@ -1,5 +1,5 @@
 """
-Deployment script for the R2A2 Subsystem and the Financial Advisor Agent.
+Deployment script for the MCS Subsystem and the Financial Advisor Agent.
 
 This script launches both services as concurrent, non-blocking subprocesses
 and manages their lifecycle. It ensures that if the script is terminated
@@ -19,9 +19,10 @@ env = os.environ.copy()
 env["PYTHONPATH"] = env.get("PYTHONPATH", "") + os.pathsep + PROJECT_ROOT
 
 # Define the commands to run each server
-R2A2_COMMAND = [
+# Define the commands to run each server
+MCS_COMMAND = [
     sys.executable, "-m", "uvicorn",
-    "r2a2.api.server:app",
+    "metacognitive_control_subsystem.mcs.api.server:app",  # <--- Corrected path
     "--host", "0.0.0.0",
     "--port", "8000",
 ]
@@ -43,16 +44,16 @@ def run():
     print("--- Starting All Services ---")
 
     try:
-        # Launch R2A2 Subsystem
-        print("🚀 Launching R2A2 Safety Subsystem on port 8000...")
-        r2a2_process = subprocess.Popen(
-            R2A2_COMMAND,
+        # Launch MCS Subsystem
+        print("🚀 Launching MCS Safety Subsystem on port 8000...")
+        mcs_process = subprocess.Popen(
+            MCS_COMMAND,
             env=env,
             stdout=sys.stdout,
             stderr=sys.stderr
         )
-        processes.append(r2a2_process)
-        print(f"✅ R2A2 Subsystem process started with PID: {r2a2_process.pid}")
+        processes.append(mcs_process)
+        print(f"✅ MCS Subsystem process started with PID: {mcs_process.pid}")
 
         # Launch Financial Advisor Agent
         print("🚀 Launching Financial Advisor Agent on port 8001...")

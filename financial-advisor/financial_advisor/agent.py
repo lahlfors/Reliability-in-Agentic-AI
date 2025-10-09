@@ -27,7 +27,7 @@ from google.adk.tools.agent_tool import AgentTool
 from google.genai import types
 
 # --- Updated import from top-level observability package ---
-from observability import setup_logging, get_logger
+from observability.observability.logging_config import setup_logging, get_logger
 
 # Setup logging as early as possible
 setup_logging()
@@ -137,7 +137,7 @@ class MCSVettedFinancialAgent(LlmAgent):
                 }
             },
             # Provide tool schemas if available, otherwise an empty list
-            "tool_schemas": [t.definition for t in self.tools] if hasattr(self, 'tools') else []
+            "tool_schemas": [t._get_declaration().model_dump(exclude_unset=True) for t in self.tools] if hasattr(self, 'tools') else []
         }
 
         try:
@@ -193,7 +193,7 @@ try:
     # The `adk web` command requires a module-level variable named `root_agent`.
     root_agent = MCSVettedFinancialAgent(
         name="financial_coordinator",
-        model="gemini-1.5-pro",
+        model="gemini-2.5-pro",
         description=(
             "A financial agent designed to provide vetted financial advice."
         ),

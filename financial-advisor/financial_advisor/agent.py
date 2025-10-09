@@ -13,50 +13,53 @@
 # limitations under the License.
 
 """Financial coordinator: provide reasonable investment strategies"""
-
+import logging
+import uuid
+import traceback
 from typing import AsyncIterator
-from google.adk.agents import BaseAgent, InvocationContext, LlmAgent
+
+# Correct imports for the Google ADK framework
+from google.adk.agents import LlmAgent, InvocationContext
+from google.adk.events.event import Event
 from google.adk.tools.agent_tool import AgentTool
 
-from . import prompt
-from .sub_agents.data_analyst import data_analyst_agent
-from .sub_agents.execution_analyst import execution_analyst_agent
-from .sub_agents.trading_analyst import trading_analyst_agent
-from .utils.r2a2_client import R2A2Client
+# Correct, stable import pattern for Content/Part types
+from google.genai import types
 
+# --- Updated import from top-level observability package ---
+from observability import setup_logging, get_logger
 
-class R2A2VettedFinancialAgent(BaseAgent):
+# Setup logging as early as possible
+setup_logging()
+
+# Get a logger for this module
+logger = get_logger(__name__)
+
+logger.info("R2A2VettedFinancialAgent module loading...")
+
+class R2A2VettedFinancialAgent(LlmAgent):
     """
-    A wrapper agent that runs the financial coordinator and vets its final
-    output through the R2A2 Modular Safety Subsystem.
-
-    This class inherits from BaseAgent to be compatible with the ADK framework
-    and uses a Pydantic model structure.
+    A financial agent that extends LlmAgent to incorporate a safety-vetting
+    step before producing a final response. It is designed to be robust
+    and handle potential failures gracefully.
     """
-    # Pydantic fields must be declared at the class level with type hints.
-    name: str
-    coordinator: LlmAgent
-    r2a2_client: R2A2Client
+    # Declare the custom r2a2_client field using a string forward reference.
+    r2a2_client: "R2A2Client"
+    _r2a2_is_setup: bool = False
 
-    def __init__(self, name: str, coordinator: LlmAgent, r2a2_client: R2A2Client):
+    def __init__(self, r2a2_client: "R2A2Client", **kwargs):
         """Initializes the vetted agent."""
-        # Call the parent __init__ to satisfy the Pydantic model.
-        super().__init__(
-            name=name,
-            coordinator=coordinator,
-            r2a2_client=r2a2_client
-        )
-        self._r2a2_is_setup = False  # Flag for lazy initialization
+        super().__init__(r2a2_client=r2a2_client, **kwargs)
+        self._r2a2_is_setup = False
 
     async def _setup_r2a2_connection_async(self):
-        """
-        Performs one-time setup and configuration of the R2A2 client.
-        This is called lazily on the first run.
-        """
-        print("Waiting for R2A2 server to become ready...")
+        """Performs one-time setup and configuration of the R2A2 client."""
+        if self._r2a2_is_setup:
+            return
+        logger.info("Waiting for R2A2 server to become ready...")
         if not await self.r2a2_client.is_server_ready_async():
             raise ConnectionError("R2A2 Safety Subsystem is not available.")
-        print("R2A2 server is ready.")
+        logger.info("R2A2 server is ready.")
 
         constraints = [
             {"name": "tool_misuse", "description": "Limits risky tool use.", "budget": 0.8},
@@ -64,31 +67,63 @@ class R2A2VettedFinancialAgent(BaseAgent):
             {"name": "privacy_leak", "description": "Prevents PII leaks.", "budget": 0.5},
         ]
         await self.r2a2_client.configure_constraints_async(constraints)
-        print("R2A2 constraints configured successfully.")
+        logger.info("R2A2 constraints configured successfully.")
         self._r2a2_is_setup = True
 
-    async def _run_async_impl(self, ctx: InvocationContext) -> AsyncIterator[dict]:
+    async def _run_async_impl(self, ctx: InvocationContext) -> AsyncIterator[Event]:
         """
-        Asynchronously runs the financial coordinator and vets its final output.
-        This is the required implementation for a BaseAgent.
+        The core execution method. It runs the parent LlmAgent's logic,
+        intercepts the result, vets it, and then yields a final, safe response.
         """
-        if not self._r2a2_is_setup:
+        try:
             await self._setup_r2a2_connection_async()
+        except Exception as e:
+            logger.error(f"Error setting up safety system: {e}", exc_info=True)
+            yield Event(
+                author=self.name,
+                content=types.Content(parts=[types.Part(text=f"Error setting up safety system: {e}")]),
+                id=str(uuid.uuid4()),
+                invocation_id=ctx.invocation_id,
+                partial=False
+            )
+            return
 
-        # 1. Get the user's query from the InvocationContext.
         user_query = str(ctx.user_content)
-        coordinator_inputs = {"query": user_query}
+        logger.debug(f"User query: {user_query}")
 
-        # 2. Get the proposed plan from the coordinator agent asynchronously.
-        print("Getting financial plan from the coordinator agent...")
-        final_event = {}
-        async for event in self.coordinator.run_async(**coordinator_inputs):
-            if event.get("is_final"):
-                final_event = event
-        proposed_plan_str = final_event.get("output", "")
+        logger.info("Getting financial plan from the underlying LlmAgent...")
+        final_event = None
+        try:
+            async for event in super()._run_async_impl(ctx):
+                if not event.partial:
+                    final_event = event
+        except Exception as e:
+            logger.error(f"Error during plan generation: {e}", exc_info=True)
+            yield Event(
+                author=self.name,
+                content=types.Content(parts=[types.Part(text=f"Error during plan generation: {e}")]),
+                id=str(uuid.uuid4()),
+                invocation_id=ctx.invocation_id,
+                partial=False
+            )
+            return
 
-        # 3. Vet the proposed plan with the R2A2 subsystem asynchronously.
-        print("Vetting the financial plan with the R2A2 Safety Subsystem...")
+        proposed_plan_str = ""
+        if final_event and final_event.content and final_event.content.parts:
+            proposed_plan_str = final_event.content.parts[0].text
+        else:
+            logger.warning("Could not generate an initial financial plan.")
+            yield Event(
+                author=self.name,
+                content=types.Content(parts=[types.Part(text="Could not generate an initial financial plan.")]),
+                id=str(uuid.uuid4()),
+                invocation_id=ctx.invocation_id,
+                partial=False
+            )
+            return
+        logger.debug(f"Proposed plan: {proposed_plan_str}")
+
+        logger.info("Vetting the financial plan with the R2A2 Safety Subsystem...")
         task_instruction = (
             "You are a safety firewall. A financial agent has proposed the "
             "following investment plan. Analyze it for risks such as tool "
@@ -98,64 +133,70 @@ class R2A2VettedFinancialAgent(BaseAgent):
             "user_query": user_query,
             "proposed_plan": proposed_plan_str
         }
-        vetting_result = await self.r2a2_client.vet_action_async(task_instruction, observations)
+        try:
+            vetting_result = await self.r2a2_client.vet_action_async(task_instruction, observations)
+        except Exception as e:
+            logger.error(f"Error during safety vetting: {e}", exc_info=True)
+            yield Event(
+                author=self.name,
+                content=types.Content(parts=[types.Part(text=f"Error during safety vetting: {e}")]),
+                id=str(uuid.uuid4()),
+                invocation_id=ctx.invocation_id,
+                partial=False
+            )
+            return
+        logger.debug(f"Vetting result: {vetting_result}")
 
-        # 4. Process the result and yield the final output.
         if vetting_result and vetting_result.get("status") == "ACTION_APPROVED":
             explanation = vetting_result.get("explanation", "Plan approved by R2A2.")
-            final_response = (
+            final_response_text = (
                 "--- PLAN APPROVED BY SAFETY SUBSYSTEM ---\n"
                 f"Reasoning: {explanation}\n\n"
                 f"--- Financial Plan ---\n{proposed_plan_str}"
             )
-        elif vetting_result and vetting_result.get("status") == "DEFER_TO_HUMAN":
-            explanation = vetting_result.get("explanation", "No explanation provided.")
-            final_response = (
+        else:
+            explanation = vetting_result.get("explanation", "An unspecified safety concern was raised.")
+            final_response_text = (
                 "--- PLAN REJECTED BY SAFETY SUBSYSTEM ---\n"
                 f"Reason: {explanation}\n\n"
-                "The proposed financial plan was deemed too risky to proceed."
+                "The proposed financial plan was blocked to ensure safety. "
+                "Please refine your request or consult a human expert."
             )
-        else:
-            final_response = (
-                "--- SAFETY SUBSYSTEM ERROR ---\n"
-                "Could not get a safety assessment from the R2A2 subsystem. "
-                "Aborting to ensure safety."
-            )
+        logger.info("Yielding final response.")
+        final_content = types.Content(parts=[types.Part(text=final_response_text)])
+        yield Event(author=self.name, content=final_content, id=str(uuid.uuid4()), invocation_id=ctx.invocation_id, partial=False)
 
-        yield {"output": final_response, "is_final": True}
+# Initialize root_agent to None to handle potential instantiation errors.
+root_agent = None
+try:
+    # Defer local imports to prevent circular dependencies at load time.
+    from . import prompt
+    from .sub_agents.data_analyst import data_analyst_agent
+    from .sub_agents.execution_analyst import execution_analyst_agent
+    from .sub_agents.trading_analyst import trading_analyst_agent
+    from .utils.r2a2_client import R2A2Client
 
+    # After importing the necessary classes, tell Pydantic to resolve
+    # the string-based forward references in our agent class.
+    R2A2VettedFinancialAgent.model_rebuild()
 
-def create_agent() -> R2A2VettedFinancialAgent:
-    """
-    Factory function to create and configure the financial advisor agent.
-    This avoids module-level instantiation, which can cause issues with testing
-    and framework loading.
-    """
-    MODEL = "gemini-1.5-pro"
-
-    # Define the coordinator agent without the risk_analyst tool.
-    financial_coordinator = LlmAgent(
+    logger.info("Attempting to create root_agent instance...")
+    # The `adk web` command requires a module-level variable named `root_agent`.
+    root_agent = R2A2VettedFinancialAgent(
         name="financial_coordinator",
-        model=MODEL,
+        model="gemini-1.5-pro",
         description=(
-            "guide users through a structured process to receive financial "
-            "advice by orchestrating a series of expert subagents. help them "
-            "analyze a market ticker, develop trading strategies, and define "
-            "execution plans."
+            "A financial agent designed to provide vetted financial advice."
         ),
         instruction=prompt.FINANCIAL_COORDINATOR_PROMPT,
-        output_key="financial_coordinator_output",
         tools=[
             AgentTool(agent=data_analyst_agent),
             AgentTool(agent=trading_analyst_agent),
             AgentTool(agent=execution_analyst_agent),
         ],
-    )
-
-    # Create an instance of the custom vetted agent
-    vetted_agent = R2A2VettedFinancialAgent(
-        name="r2a2_vetted_financial_agent",
-        coordinator=financial_coordinator,
         r2a2_client=R2A2Client()
     )
-    return vetted_agent
+    logger.info("root_agent instance created successfully.")
+except Exception as e:
+    logger.critical(f"FATAL ERROR during root_agent instantiation: {e}", exc_info=True)
+    # root_agent remains None if instantiation fails

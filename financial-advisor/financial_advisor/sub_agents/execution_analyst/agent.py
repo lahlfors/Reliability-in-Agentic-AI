@@ -14,9 +14,15 @@
 
 """Execution_analyst_agent for finding the ideal execution strategy"""
 
+import logging
 from google.adk import Agent
+from observability import get_logger
 
 from . import prompt
+
+logger = get_logger(__name__)
+logger.info("Execution Analyst Agent module loaded.")
+
 
 MODEL = "gemini-2.5-pro"
 

@@ -1,0 +1,19 @@
+# Environments
+.env
+.env/
+.venv/
+env/
+venv/
+
+# Python
+__pycache__/
+*.pyc
+
+# IDEs & Test Caches
+.vscode/
+.idea/
+.pytest_cache/
+.DS_Store
+
+# Build artifacts
+*.egg-info

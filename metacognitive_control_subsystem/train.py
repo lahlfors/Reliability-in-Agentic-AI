@@ -1,100 +1,81 @@
 """
-This module trains the Deliberation Controller's policy using a Q-learning
-algorithm on the custom CMDP environment.
+This module trains the Deliberation Controller's policy using the PPO algorithm
+from Stable Baselines3 on the custom Gymnasium CMDP environment.
 """
-import json
 import os
 import numpy as np
-import random
-from collections import defaultdict
+import gymnasium as gym
+from stable_baselines3 import PPO
+from stable_baselines3.common.vec_env import DummyVecEnv
+from stable_baselines3.common.callbacks import BaseCallback
 
 from metacognitive_control_subsystem.mcs.formal.cmdp_env import CMDP_Environment
 from metacognitive_control_subsystem.mcs.api.schemas import Constraint
 
+# --- Lagrangian Callback for SB3 ---
+class LagrangianCallback(BaseCallback):
+    """
+    A custom callback for Stable Baselines3 to implement a simple Lagrangian
+    penalty. It adjusts the reward based on the cost received from the environment.
+    """
+    def __init__(self, cost_threshold=0.1, lambda_initial=1.0, lambda_lr=0.01, verbose=0):
+        super().__init__(verbose)
+        self.cost_threshold = cost_threshold
+        self.lambda_val = lambda_initial
+        self.lambda_lr = lambda_lr
+
+    def _on_step(self) -> bool:
+        # `infos` is a list of dictionaries, one for each environment.
+        # Since we use DummyVecEnv, there's only one.
+        cost = self.training_env.get_attr('last_cost', 0)[0]
+
+        # Primal update is implicitly handled by modifying the reward
+        # This is a simplified version of R' = R - lambda * C
+        if self.model.ep_info_buffer:
+            self.model.ep_info_buffer[-1]['r'] -= self.lambda_val * cost
+            self.model.ep_info_buffer[-1]['c'] = cost # Store cost for averaging
+
+        # Dual update: Adjust lambda based on constraint violation
+        if self.model.ep_info_buffer:
+            avg_cost = np.mean([ep_info.get('c', 0) for ep_info in self.model.ep_info_buffer])
+            self.lambda_val = max(0, self.lambda_val + self.lambda_lr * (avg_cost - self.cost_threshold))
+
+        return True
+
 def train():
     """
-    Trains a Q-learning agent on the CMDP_Environment and saves the resulting
-    policy as a set of rules in a JSON file.
+    Trains a PPO agent on the CMDP_Environment and saves the trained model.
     """
-    # --- 1. Environment and Hyperparameter Setup ---
-    # Define the constraints the environment should model
+    print("--- Starting Training ---")
+
+    # --- 1. Environment Setup ---
     constraints = [
         Constraint(name="Fiduciary Duty Constraint", description="", budget=0.01),
         Constraint(name="Compliance Constraint", description="", budget=0.0),
         Constraint(name="NO_FILE_DELETION", description="", budget=0.0),
     ]
-    env = CMDP_Environment(constraints)
 
-    # Q-learning hyperparameters
-    alpha = 0.1  # Learning rate
-    gamma = 0.6  # Discount factor
-    epsilon = 0.1  # Exploration rate
-    num_episodes = 10000
+    # Stable Baselines3 works with vectorized environments
+    vec_env = DummyVecEnv([lambda: CMDP_Environment(constraints)])
 
-    # Initialize the Q-table as a nested dictionary
-    # The state is discretized for simplicity.
-    q_table = defaultdict(lambda: np.zeros(len(env.action_space)))
+    # --- 2. Model and Training Setup ---
+    # PPO is a good choice for this discrete action space
+    model = PPO("MlpPolicy", vec_env, verbose=1)
 
-    # --- 2. Training Loop ---
-    for i in range(num_episodes):
-        state = env.reset()
-        # Discretize the continuous state into a tuple to be used as a dict key
-        state_discrete = tuple((state * 10).astype(int))
+    # Use the custom callback to handle the Lagrangian penalty
+    callback = LagrangianCallback()
 
-        done = False
-        while not done:
-            # Epsilon-greedy action selection
-            if random.uniform(0, 1) < epsilon:
-                action_index = random.choice(range(len(env.action_space)))
-            else:
-                action_index = np.argmax(q_table[state_discrete])
+    # --- 3. Training ---
+    print("Training PPO model with Lagrangian penalty...")
+    model.learn(total_timesteps=10000, callback=callback)
+    print("\n--- Training Finished ---")
 
-            # Take the action
-            next_state, reward, cost, done, _ = env.step(action_index)
-            next_state_discrete = tuple((next_state * 10).astype(int))
+    # --- 4. Saving the Model ---
+    model_path = os.path.join(os.path.dirname(__file__), "ppo_mcs_policy.zip")
+    model.save(model_path)
 
-            # --- Q-learning update rule (with a simple penalty for cost) ---
-            # A true Lagrangian approach would have a separate update for the multiplier.
-            # Here, we directly incorporate a penalty into the reward.
-            lagrangian_reward = reward - (10 * cost) # Using a fixed lambda of 10 for simplicity
-
-            old_value = q_table[state_discrete][action_index]
-            next_max = np.max(q_table[next_state_discrete])
-
-            new_value = (1 - alpha) * old_value + alpha * (lagrangian_reward + gamma * next_max)
-            q_table[state_discrete][action_index] = new_value
-
-            state_discrete = next_state_discrete
-
-    print("Training finished.\n")
-
-    # --- 3. Policy Extraction and Saving ---
-    # Convert the learned Q-table into a more interpretable set of rules.
-    policy = {
-        "policy_type": "q_learning_table",
-        "rules": []
-    }
-
-    # For each learned state, find the best action and save it as a rule.
-    for state, actions in q_table.items():
-        best_action_index = np.argmax(actions)
-        best_action = env.action_space[best_action_index]
-        # The condition is a simplified representation of the belief state
-        condition = {
-            "goal_alignment": state[0] / 10.0,
-            "plan_soundness": state[1] / 10.0,
-            "environment_trustworthiness": state[2] / 10.0,
-            "security_posture": state[3] / 10.0,
-        }
-        policy["rules"].append({"condition": condition, "action": best_action})
-
-    # Save the policy to a file
-    policy_path = os.path.join(os.path.dirname(__file__), "policy.json")
-    with open(policy_path, "w") as f:
-        json.dump(policy, f, indent=4)
-
-    print(f"Policy extracted and saved to {policy_path} with {len(policy['rules'])} rules.")
-
+    print(f"\nTrained PPO policy saved to: {model_path}")
 
 if __name__ == "__main__":
+    # Add a guard to avoid issues with multiprocessing in SB3
     train()

@@ -3,7 +3,7 @@ Unit tests for the TDD-aligned FastAPI server and its /deliberate endpoint.
 """
 import unittest
 from fastapi.testclient import TestClient
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 # Import the FastAPI app from the server module
 from metacognitive_control_subsystem.mcs.api.server import app
@@ -24,19 +24,16 @@ class TestDeliberateAPI(unittest.TestCase):
         # Reset constraints before each test to ensure isolation
         self.client.post("/configure/constraints", json=[])
 
-    @patch('metacognitive_control_subsystem.mcs.components.deliberation_controller.DeliberationController._load_policy')
-    def test_deliberate_endpoint_approves_safe_action(self, mock_load_policy):
+    @patch('stable_baselines3.PPO.load')
+    def test_deliberate_endpoint_approves_safe_action(self, mock_ppo_load):
         """
         Test that a safe action is approved with an 'EXECUTE' decision.
         """
         # Mock the policy to be deterministic and correct for this test case
-        mock_load_policy.return_value = {
-            "policy_type": "test_policy",
-            "rules": [
-                {"condition": {"goal_alignment": 0.9, "plan_soundness": 0.9, "environment_trustworthiness": 0.9, "security_posture": 0.9}, "action": "EXECUTE"},
-                {"condition": {"goal_alignment": 0.1, "plan_soundness": 0.1, "environment_trustworthiness": 0.1, "security_posture": 0.1}, "action": "VETO"}
-            ]
-        }
+        mock_policy = MagicMock()
+        mock_policy.predict.return_value = (0, None) # Action index 0 is EXECUTE
+        mock_ppo_load.return_value = mock_policy
+
         # Re-initialize the controller with the mocked policy by configuring constraints
         self.client.post("/configure/constraints", json=[])
 
@@ -57,7 +54,7 @@ class TestDeliberateAPI(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         response_json = response.json()
         self.assertEqual(response_json["decision"], "EXECUTE")
-        self.assertIn("from learned policy", response_json["justification"])
+        self.assertIn("from trained PPO policy", response_json["justification"])
 
     def test_deliberate_endpoint_vetoes_dangerous_action(self):
         """

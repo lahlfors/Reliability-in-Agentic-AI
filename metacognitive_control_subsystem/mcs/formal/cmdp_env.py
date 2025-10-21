@@ -1,33 +1,41 @@
 """
 This module defines the custom CMDP environment for training the Deliberation
-Controller. It conforms to the conventions expected by RL libraries like TF-Agents,
-separating the reward signal from the cost/constraint signal.
+Controller, refactored to be compatible with the Gymnasium standard used by
+Stable Baselines3.
 """
 import numpy as np
 import random
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
+
+import gymnasium as gym
+from gymnasium import spaces
 
 from metacognitive_control_subsystem.mcs.api.schemas import AgentState, ProposedAction, Constraint
 from metacognitive_control_subsystem.mcs.components.state_monitor import StateMonitor
 from metacognitive_control_subsystem.mcs.components.risk_modeler import RiskConstraintModeler
 
-class CMDP_Environment:
+class CMDP_Environment(gym.Env):
     """
-    A custom environment for training the Deliberation Controller's policy.
+    A custom Gymnasium environment for training the Deliberation Controller's policy.
     It simulates the interaction between the MCS and a host agent, generating
     rewards and costs based on the metacognitive actions taken.
     """
 
     def __init__(self, constraints: List[Constraint]):
         """Initializes the CMDP environment."""
-        self.action_space = ['EXECUTE', 'REVISE', 'VETO', 'ESCALATE']
+        super().__init__()
+
+        self.action_space = spaces.Discrete(4)  # 0:EXECUTE, 1:REVISE, 2:VETO, 3:ESCALATE
+        self._action_map = ['EXECUTE', 'REVISE', 'VETO', 'ESCALATE']
+
         # The observation space is the 4-dimensional belief state vector
-        self.observation_space_shape = (4,)
+        self.observation_space = spaces.Box(low=0.0, high=1.0, shape=(4,), dtype=np.float32)
 
         self.state_monitor = StateMonitor()
         self.risk_modeler = RiskConstraintModeler(constraints)
 
         self.current_agent_state = self._generate_random_agent_state()
+        self.last_cost = 0.0
 
     def _generate_random_agent_state(self) -> AgentState:
         """
@@ -48,63 +56,51 @@ class CMDP_Environment:
             proposed_action=random.choice(tools)
         )
 
-    def step(self, action_index: int) -> tuple[np.ndarray, float, float, bool, Dict[str, Any]]:
+    def step(self, action: int) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
         """
         Executes one step in the environment.
-
-        Args:
-            action_index: The numerical index of the action to take.
-
-        Returns:
-            A tuple containing: (observation, reward, cost, terminated, info)
         """
-        action = self.action_space[action_index]
+        action_name = self._action_map[action]
 
-        # 1. Evaluate the current state
         belief_state = self.state_monitor.construct_belief_state(self.current_agent_state)
         risks = self.risk_modeler.evaluate_risks(self.current_agent_state)
 
-        # 2. Calculate Cost: The sum of all constraint violations
-        cost = sum(risks.values())
+        self.last_cost = sum(risks.values())
 
-        # 3. Calculate Reward (Value of Computation)
         reward = 0.0
-        # High reward for executing a sound and safe plan
-        if action == 'EXECUTE':
-            if cost == 0:
-                reward = belief_state.plan_soundness * belief_state.goal_alignment
-            else:
-                reward = -1.0 # Penalize executing a risky action
-
-        # High reward for vetoing a genuinely risky action
-        elif action == 'VETO':
-            if cost > 0:
-                reward = 0.8
-            else:
-                reward = -0.5 # Penalize vetoing a safe action
-
-        # Small penalty for revising, as it consumes resources
-        elif action == 'REVISE':
+        if action_name == 'EXECUTE':
+            reward = (belief_state.plan_soundness * belief_state.goal_alignment) if self.last_cost == 0 else -1.0
+        elif action_name == 'VETO':
+            reward = 0.8 if self.last_cost > 0 else -0.5
+        elif action_name == 'REVISE':
             reward = -0.1
-
-        # Large penalty for escalating to a human
-        elif action == 'ESCALATE':
+        elif action_name == 'ESCALATE':
             reward = -0.5
 
-        # 4. Prepare for the next state
-        # In this simulation, each step is independent (episode length is 1)
-        self.current_agent_state = self._generate_random_agent_state()
-        next_observation = self.state_monitor.construct_belief_state(self.current_agent_state)
+        # The info dict must now include the cost for the Lagrangian wrapper
+        info = {'cost': self.last_cost, 'risks': risks}
 
-        terminated = True # End of episode
-        info = {'risks': risks}
+        # In this simulation, each episode is a single step.
+        terminated = True
+        truncated = False # Not using time limits
 
-        return np.array(list(next_observation.dict().values())), reward, cost, terminated, info
+        # Prepare the next state for the return value, though it won't be used
+        # since the episode is terminated.
+        next_obs, _ = self.reset()
 
-    def reset(self) -> np.ndarray:
+        return next_obs, reward, terminated, truncated, info
+
+    def reset(self, seed=None, options=None) -> Tuple[np.ndarray, Dict[str, Any]]:
         """
         Resets the environment to a new random initial state.
         """
+        super().reset(seed=seed)
         self.current_agent_state = self._generate_random_agent_state()
         initial_belief_state = self.state_monitor.construct_belief_state(self.current_agent_state)
-        return np.array(list(initial_belief_state.dict().values()))
+
+        # Gymnasium expects the info dict in the reset return as well
+        return np.array(list(initial_belief_state.model_dump().values()), dtype=np.float32), {}
+
+    def render(self, mode='human'):
+        # The environment is not visual, so render is a no-op
+        pass

@@ -8,8 +8,8 @@ PID controller for stable and reliable safety adaptation.
 """
 
 from typing import Dict, List, Optional
-from r2a2.formal.pid_controller import PIDController
-from r2a2.api.schemas import Constraint, PIDGains
+from metacognitive_control_subsystem.mcs.formal.pid_controller import PIDController
+from metacognitive_control_subsystem.mcs.api.schemas import Constraint, PIDGains
 
 class CMDP_Constraint:
     """

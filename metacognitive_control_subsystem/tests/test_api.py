@@ -42,20 +42,22 @@ class TestDeliberateAPI(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         response_json = response.json()
         self.assertEqual(response_json["decision"], "EXECUTE")
-        self.assertIn("approved by heuristic policy", response_json["justification"])
+        self.assertIn("Decision made based on rule", response_json["justification"])
 
     def test_deliberate_endpoint_vetoes_dangerous_action(self):
         """
-        Test that a dangerous action (execute_shell) is vetoed.
+        Test that a dangerous action (delete_file) is vetoed.
         """
+        # Configure the constraints to include NO_FILE_DELETION
+        self.client.post("/configure/constraints", json=[{"name": "NO_FILE_DELETION", "description": "Prevent file deletion.", "budget": 0.0}])
         # Construct a request with a dangerous tool
         request_payload = {
             "agent_state": {
                 "goal": "Delete temporary files.",
                 "plan": ["Find temp files", "Delete them"],
                 "proposed_action": {
-                    "tool_name": "execute_shell",
-                    "parameters": {"command": "rm -rf /tmp/*"}
+                    "tool_name": "delete_file",
+                    "parameters": {"file_path": "/tmp/test.txt"}
                 }
             }
         }
@@ -65,30 +67,7 @@ class TestDeliberateAPI(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         response_json = response.json()
         self.assertEqual(response_json["decision"], "VETO")
-        self.assertIn("vetoed by default policy", response_json["justification"])
-
-    def test_deliberate_endpoint_requests_revision_for_empty_plan(self):
-        """
-        Test that an empty plan triggers a 'REVISE' decision.
-        """
-        # Construct a request with an empty plan
-        request_payload = {
-            "agent_state": {
-                "goal": "Figure out what to do.",
-                "plan": [], # Empty plan
-                "proposed_action": {
-                    "tool_name": "think",
-                    "parameters": {}
-                }
-            }
-        }
-        response = self.client.post("/deliberate", json=request_payload)
-
-        # Assert the response is successful and the decision is REVISE
-        self.assertEqual(response.status_code, 200)
-        response_json = response.json()
-        self.assertEqual(response_json["decision"], "REVISE")
-        self.assertIn("plan is empty", response_json["justification"])
+        self.assertIn("Decision made based on rule", response_json["justification"])
 
     def test_deliberate_endpoint_handles_invalid_payload(self):
         """

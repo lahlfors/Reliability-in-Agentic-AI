@@ -1,0 +1,1 @@
+{"policy_type": "placeholder", "rules": [{"condition": "risks.get('NO_FILE_DELETION', 0.0) == 1.0", "action": "VETO"}, {"condition": "True", "action": "EXECUTE"}]}

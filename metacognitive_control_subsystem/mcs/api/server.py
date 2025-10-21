@@ -6,6 +6,7 @@ agent to interact with the R2A2 subsystem. It wires together all the
 cognitive components to create a complete decision-making loop.
 """
 from fastapi import FastAPI, HTTPException, Body
+from typing import List
 
 # Import the new TDD-aligned schemas
 from metacognitive_control_subsystem.mcs.api.schemas import (
@@ -26,8 +27,8 @@ app = FastAPI(
 
 # --- Global State & Component Initialization ---
 
-# Instantiate the core Deliberation Controller
-deliberation_controller = DeliberationController()
+# Instantiate the core Deliberation Controller with no initial constraints
+deliberation_controller = DeliberationController(constraints=[])
 
 # --- API Endpoints ---
 
@@ -42,16 +43,15 @@ async def deliberate(request: DeliberateRequest):
     return decision_response
 
 
-# --- Configuration Endpoints (Retained for now) ---
+# --- Configuration Endpoints ---
 
 @app.post("/configure/constraints", response_model=ConfigureResponse)
-async def configure_constraints(constraints: list[Constraint] = Body(...)):
+async def configure_constraints(constraints: List[Constraint] = Body(...)):
     """
     Defines or updates the set of safety constraints the subsystem must enforce.
-    (This functionality will be integrated into the new components later)
     """
-    print(f"Configuring {len(constraints)} constraints.")
-    # Placeholder for future implementation
+    global deliberation_controller
+    deliberation_controller = DeliberationController(constraints=constraints)
     return ConfigureResponse()
 
 @app.post("/configure/settings", response_model=ConfigureResponse)

@@ -4,7 +4,7 @@ This directory contains the source code for the Reflective Risk-Aware Agent Arch
 
 ## Project Structure
 
--   `/r2a2`: Contains the core source code for the subsystem.
+-   `/mcs`: Contains the core source code for the subsystem.
     -   `/api`: FastAPI server and Pydantic schemas for the external API.
     -   `/components`: The core cognitive modules (Perceiver, Planner, World Model, etc.).
     -   `/formal`: The mathematical foundations of the system (CMDP, PID Controller).

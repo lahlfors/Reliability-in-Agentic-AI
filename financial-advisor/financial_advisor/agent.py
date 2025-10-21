@@ -62,9 +62,16 @@ class MCSVettedFinancialAgent(LlmAgent):
         logger.info("MCS server is ready.")
 
         constraints = [
-            {"name": "tool_misuse", "description": "Limits risky tool use.", "budget": 0.8},
-            {"name": "resource_usage", "description": "Limits API calls.", "budget": 1.0},
-            {"name": "privacy_leak", "description": "Prevents PII leaks.", "budget": 0.5},
+            {
+                "name": "Fiduciary Duty Constraint",
+                "description": "Ensures the agent's recommendations are suitable for the user's stated risk profile.",
+                "budget": 0.01
+            },
+            {
+                "name": "Compliance Constraint",
+                "description": "Ensures the agent adheres to legal and regulatory requirements.",
+                "budget": 0.0
+            }
         ]
         await self.mcs_client.configure_constraints_async(constraints)
         logger.info("MCS constraints configured successfully.")
@@ -166,7 +173,7 @@ class MCSVettedFinancialAgent(LlmAgent):
             decision = deliberation_result.get('decision', 'UNKNOWN') if deliberation_result else 'ERROR'
             justification = deliberation_result.get("justification", "An unspecified safety concern was raised.")
             final_response_text = (
-                f"--- PLAN REJECTED BY SAFETY SUBSYYSTEM (Decision: {decision}) ---\n"
+                f"--- PLAN REJECTED BY SAFETY SUBSYSTEM (Decision: {decision}) ---\n"
                 f"Reason: {justification}\n\n"
                 "The proposed financial plan was blocked to ensure safety. "
                 "Please refine your request or consult a human expert."

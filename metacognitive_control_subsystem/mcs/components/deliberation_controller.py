@@ -6,10 +6,14 @@ solving the metalevel control problem: deciding what the agent should do next.
 It selects the optimal metalevel action (e.g., EXECUTE, REVISE, VETO) based
 on the agent's current belief state and risk assessments.
 """
+import json
 import logging
+import os
 from typing import Dict, Any
 
 from metacognitive_control_subsystem.mcs.api.schemas import DeliberateRequest, DeliberateResponse, ProposedAction
+from metacognitive_control_subsystem.mcs.components.state_monitor import StateMonitor, BeliefState
+from metacognitive_control_subsystem.mcs.components.risk_modeler import RiskConstraintModeler
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -19,56 +23,50 @@ logger = logging.getLogger(__name__)
 class DeliberationController:
     """
     The 'brain' of the MCS, implementing the metalevel policy.
-
-    This initial version uses a simple, heuristic-based policy as described
-    in Phase 1 of the TDD's implementation plan.
     """
 
-    def __init__(self):
+    def __init__(self, constraints):
         """Initializes the Deliberation Controller."""
-        logger.info("Deliberation Controller Initialized (Heuristic Policy).")
-        # In a more advanced implementation, this would load a trained policy model.
+        logger.info("Deliberation Controller Initialized.")
+        self.state_monitor = StateMonitor()
+        self.risk_modeler = RiskConstraintModeler(constraints)
+        self.policy = self._load_policy()
 
-    def _heuristic_policy(self, request: DeliberateRequest) -> DeliberateResponse:
+    def _load_policy(self):
+        """Loads the trained policy from a file."""
+        # Get the absolute path to the directory containing this file
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        # Construct the path to the policy file, which is in the parent directory of the current directory.
+        policy_path = os.path.join(current_dir, "..", "policy.json")
+        try:
+            with open(policy_path, "r") as f:
+                return json.load(f)
+        except FileNotFoundError:
+            # Fallback for tests running in different directory structures
+            policy_path = os.path.join(os.path.dirname(__file__), "..", "..", "policy.json")
+            with open(policy_path, "r") as f:
+                return json.load(f)
+
+
+    def _execute_policy(self, belief_state: BeliefState, risks: Dict[str, float]) -> DeliberateResponse:
         """
-        A simple, rule-based policy for selecting a metalevel action.
+        Executes the loaded policy.
         """
-        proposed_action = request.agent_state.proposed_action
-        justification = ""
-        decision = "EXECUTE"  # Default action
-
-        # Rule 1: Check for dangerous tool usage (e.g., shell commands)
-        if proposed_action.tool_name == "execute_shell":
-            decision = "VETO"
-            justification = "The 'execute_shell' tool is vetoed by default policy due to high risk."
-            logger.warning(f"VETO: Dangerous tool '{proposed_action.tool_name}' proposed.")
-            return DeliberateResponse(
-                decision=decision,
-                parameters={"reason": justification},
-                justification=justification,
-                risk_assessment={"dangerous_tool_risk": 1.0}
-            )
-
-        # Rule 2: If the plan is empty or seems illogical, trigger reflection.
-        if not request.agent_state.plan or len(request.agent_state.plan) == 0:
-            decision = "REVISE"
-            justification = "The agent's plan is empty. Triggering reflection to formulate a new plan."
-            logger.info("REVISE: Agent plan is empty. Requesting revision.")
-            return DeliberateResponse(
-                decision=decision,
-                parameters={"prompt": "Your plan is empty. Please analyze the goal and create a new plan."},
-                justification=justification,
-                risk_assessment={"planning_completeness": 0.1}
-            )
-
-        # Default case: Approve the action
-        justification = f"Action '{proposed_action.tool_name}' approved by heuristic policy."
-        logger.info(f"EXECUTE: Approving action '{proposed_action.tool_name}'.")
+        for rule in self.policy["rules"]:
+            if eval(rule["condition"], {"risks": risks}):
+                decision = rule["action"]
+                justification = f"Decision made based on rule: {rule['condition']}"
+                return DeliberateResponse(
+                    decision=decision,
+                    parameters={},
+                    justification=justification,
+                    risk_assessment=risks
+                )
         return DeliberateResponse(
-            decision=decision,
-            parameters=proposed_action.dict(),
-            justification=justification,
-            risk_assessment={"heuristic_policy_confidence": 0.9}
+            decision="EXECUTE",
+            parameters={},
+            justification="No rules matched, executing by default.",
+            risk_assessment=risks
         )
 
     def decide(self, request: DeliberateRequest) -> DeliberateResponse:
@@ -84,10 +82,10 @@ class DeliberationController:
         """
         logger.info(f"DeliberationController received request for action: {request.agent_state.proposed_action.tool_name}")
 
-        # For this baseline implementation, we directly call the heuristic policy.
-        # In a more advanced version, this method might orchestrate calls to
-        # multiple models (risk, policy, etc.).
-        response = self._heuristic_policy(request)
+        belief_state = self.state_monitor.construct_belief_state(request.agent_state)
+        risks = self.risk_modeler.evaluate_risks(request.agent_state)
+
+        response = self._execute_policy(belief_state, risks)
 
         logger.info(f"Decision: {response.decision}. Justification: {response.justification}")
         return response

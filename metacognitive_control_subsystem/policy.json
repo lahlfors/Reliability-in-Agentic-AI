@@ -1,0 +1,86 @@
+{
+    "policy_type": "q_learning_table",
+    "rules": [
+        {
+            "condition": {
+                "goal_alignment": 0.8,
+                "plan_soundness": 0.9,
+                "environment_trustworthiness": 0.6,
+                "security_posture": 0.9
+            },
+            "action": "EXECUTE"
+        },
+        {
+            "condition": {
+                "goal_alignment": 0.6,
+                "plan_soundness": 0.5,
+                "environment_trustworthiness": 0.8,
+                "security_posture": 0.9
+            },
+            "action": "VETO"
+        },
+        {
+            "condition": {
+                "goal_alignment": 0.6,
+                "plan_soundness": 0.9,
+                "environment_trustworthiness": 0.8,
+                "security_posture": 0.9
+            },
+            "action": "VETO"
+        },
+        {
+            "condition": {
+                "goal_alignment": 0.6,
+                "plan_soundness": 0.9,
+                "environment_trustworthiness": 0.8,
+                "security_posture": 0.1
+            },
+            "action": "EXECUTE"
+        },
+        {
+            "condition": {
+                "goal_alignment": 0.3,
+                "plan_soundness": 0.1,
+                "environment_trustworthiness": 0.8,
+                "security_posture": 0.1
+            },
+            "action": "ESCALATE"
+        },
+        {
+            "condition": {
+                "goal_alignment": 0.6,
+                "plan_soundness": 0.5,
+                "environment_trustworthiness": 0.6,
+                "security_posture": 0.9
+            },
+            "action": "REVISE"
+        },
+        {
+            "condition": {
+                "goal_alignment": 0.3,
+                "plan_soundness": 0.1,
+                "environment_trustworthiness": 0.8,
+                "security_posture": 0.9
+            },
+            "action": "VETO"
+        },
+        {
+            "condition": {
+                "goal_alignment": 0.3,
+                "plan_soundness": 0.1,
+                "environment_trustworthiness": 0.6,
+                "security_posture": 0.9
+            },
+            "action": "EXECUTE"
+        },
+        {
+            "condition": {
+                "goal_alignment": 0.6,
+                "plan_soundness": 0.5,
+                "environment_trustworthiness": 0.8,
+                "security_posture": 0.1
+            },
+            "action": "EXECUTE"
+        }
+    ]
+}

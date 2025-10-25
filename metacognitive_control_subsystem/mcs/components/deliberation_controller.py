@@ -1,93 +1,92 @@
 """
 The core decision-making component of the Metacognitive Control Subsystem.
-
 This module implements the Deliberation Controller, which is responsible for
 solving the metalevel control problem: deciding what the agent should do next.
 It selects the optimal metalevel action (e.g., EXECUTE, REVISE, VETO) based
 on the agent's current belief state and risk assessments.
 """
 import logging
+import os
 from typing import Dict, Any
+import numpy as np
+from stable_baselines3 import PPO
 
-from metacognitive_control_subsystem.mcs.api.schemas import DeliberateRequest, DeliberateResponse, ProposedAction
+from metacognitive_control_subsystem.mcs.api.schemas import DeliberateRequest, DeliberateResponse
+from metacognitive_control_subsystem.mcs.components.state_monitor import StateMonitor, BeliefState
+from metacognitive_control_subsystem.mcs.components.risk_modeler import RiskConstraintModeler
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-
 class DeliberationController:
     """
-    The 'brain' of the MCS, implementing the metalevel policy.
-
-    This initial version uses a simple, heuristic-based policy as described
-    in Phase 1 of the TDD's implementation plan.
+    The 'brain' of the MCS, implementing the metalevel policy loaded from a
+    trained Stable Baselines3 model.
     """
 
-    def __init__(self):
+    def __init__(self, constraints):
         """Initializes the Deliberation Controller."""
-        logger.info("Deliberation Controller Initialized (Heuristic Policy).")
-        # In a more advanced implementation, this would load a trained policy model.
+        logger.info("Deliberation Controller Initialized.")
+        self.state_monitor = StateMonitor()
+        self.risk_modeler = RiskConstraintModeler(constraints)
+        self._action_map = ['EXECUTE', 'REVISE', 'VETO', 'ESCALATE']
+        self.policy = self._load_policy()
 
-    def _heuristic_policy(self, request: DeliberateRequest) -> DeliberateResponse:
-        """
-        A simple, rule-based policy for selecting a metalevel action.
-        """
-        proposed_action = request.agent_state.proposed_action
-        justification = ""
-        decision = "EXECUTE"  # Default action
+    def _load_policy(self):
+        """Loads the trained SB3 policy from a file."""
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        policy_path = os.path.join(current_dir, "..", "..", "ppo_mcs_policy.zip")
+        try:
+            return PPO.load(policy_path)
+        except FileNotFoundError:
+            logger.error(f"Policy file not found at {policy_path}. Please run train.py. Using fallback heuristic.")
+            return None
 
-        # Rule 1: Check for dangerous tool usage (e.g., shell commands)
-        if proposed_action.tool_name == "execute_shell":
-            decision = "VETO"
-            justification = "The 'execute_shell' tool is vetoed by default policy due to high risk."
-            logger.warning(f"VETO: Dangerous tool '{proposed_action.tool_name}' proposed.")
+    def _execute_policy(self, belief_state: BeliefState, risks: Dict[str, float]) -> DeliberateResponse:
+        """
+        Executes the loaded SB3 PPO policy.
+        """
+        # First, apply the hard-coded safety override for high-risk actions.
+        if sum(risks.values()) > 0.5:
             return DeliberateResponse(
-                decision=decision,
-                parameters={"reason": justification},
-                justification=justification,
-                risk_assessment={"dangerous_tool_risk": 1.0}
+                decision="VETO",
+                parameters={"reason": "High-risk action detected by constraint modeler."},
+                justification="Immediate veto due to constraint violation.",
+                risk_assessment=risks
             )
 
-        # Rule 2: If the plan is empty or seems illogical, trigger reflection.
-        if not request.agent_state.plan or len(request.agent_state.plan) == 0:
-            decision = "REVISE"
-            justification = "The agent's plan is empty. Triggering reflection to formulate a new plan."
-            logger.info("REVISE: Agent plan is empty. Requesting revision.")
+        # If a trained policy exists, use it.
+        if self.policy:
+            obs = np.array(list(belief_state.model_dump().values()), dtype=np.float32)
+            action_index, _ = self.policy.predict(obs, deterministic=True)
+            decision = self._action_map[action_index]
+            justification = f"Decision '{decision}' from trained PPO policy."
             return DeliberateResponse(
                 decision=decision,
-                parameters={"prompt": "Your plan is empty. Please analyze the goal and create a new plan."},
+                parameters={},
                 justification=justification,
-                risk_assessment={"planning_completeness": 0.1}
+                risk_assessment=risks
             )
 
-        # Default case: Approve the action
-        justification = f"Action '{proposed_action.tool_name}' approved by heuristic policy."
-        logger.info(f"EXECUTE: Approving action '{proposed_action.tool_name}'.")
+        # Fallback heuristic if the policy file failed to load.
         return DeliberateResponse(
-            decision=decision,
-            parameters=proposed_action.dict(),
-            justification=justification,
-            risk_assessment={"heuristic_policy_confidence": 0.9}
+            decision="EXECUTE",
+            parameters={},
+            justification="Fallback: PPO policy not loaded, approving action by default.",
+            risk_assessment=risks
         )
 
     def decide(self, request: DeliberateRequest) -> DeliberateResponse:
         """
         The main entry point for the controller.
-        It receives the agent's state and returns a metacognitive decision.
-
-        Args:
-            request: The DeliberateRequest object containing the agent's state.
-
-        Returns:
-            A DeliberateResponse object with the controller's decision.
         """
         logger.info(f"DeliberationController received request for action: {request.agent_state.proposed_action.tool_name}")
 
-        # For this baseline implementation, we directly call the heuristic policy.
-        # In a more advanced version, this method might orchestrate calls to
-        # multiple models (risk, policy, etc.).
-        response = self._heuristic_policy(request)
+        belief_state = self.state_monitor.construct_belief_state(request.agent_state)
+        risks = self.risk_modeler.evaluate_risks(request.agent_state)
+
+        response = self._execute_policy(belief_state, risks)
 
         logger.info(f"Decision: {response.decision}. Justification: {response.justification}")
         return response

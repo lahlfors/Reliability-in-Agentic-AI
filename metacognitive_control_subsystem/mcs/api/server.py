@@ -1,8 +1,8 @@
 """
-The FastAPI server for the R2A2 subsystem.
+The FastAPI server for the MCS subsystem.
 
 This module exposes the API endpoints defined in the TDD, allowing a host
-agent to interact with the R2A2 subsystem. It wires together all the
+agent to interact with the MCS subsystem. It wires together all the
 cognitive components to create a complete decision-making loop.
 """
 from fastapi import FastAPI, HTTPException, Body
@@ -20,7 +20,7 @@ from metacognitive_control_subsystem.mcs.components.deliberation_controller impo
 # --- Application Setup ---
 
 app = FastAPI(
-    title="R2A2 Modular Safety Subsystem (TDD-Aligned)",
+    title="MCS Modular Safety Subsystem (TDD-Aligned)",
     description="An implementation of the Metacognitive Control Subsystem (MCS) architecture.",
     version="0.2.0",
 )

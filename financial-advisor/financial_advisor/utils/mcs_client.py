@@ -1,5 +1,5 @@
 """
-Asynchronous client for interacting with the R2A2 Modular Safety Subsystem API.
+Asynchronous client for interacting with the MCS Modular Safety Subsystem API.
 (Updated to support the TDD-aligned /deliberate endpoint)
 """
 
@@ -18,44 +18,44 @@ class MCSClient:
         Initializes the client.
 
         Args:
-            base_url: The base URL of the R2A2 API server.
+            base_url: The base URL of the MCS API server.
         """
         self.base_url = base_url
         self.session = httpx.AsyncClient(base_url=self.base_url, timeout=60.0)
 
     async def is_server_ready_async(self, timeout: int = 30) -> bool:
         """
-        Checks if the R2A2 server is running and responsive by polling its /docs endpoint.
+        Checks if the MCS server is running and responsive by polling its /docs endpoint.
         """
-        print("Waiting for R2A2 server to become ready...")
+        print("Waiting for MCS server to become ready...")
         try:
             async with httpx.AsyncClient(base_url=self.base_url) as client:
                 for _ in range(timeout):
                     try:
                         response = await client.get("/docs", timeout=2.0)
                         if response.status_code == 200:
-                            print("R2A2 server is ready.")
+                            print("MCS server is ready.")
                             return True
                     except (httpx.ConnectError, httpx.ReadTimeout):
                         await asyncio.sleep(1)
         except Exception as e:
             print(f"An unexpected error occurred while waiting for the server: {e}")
 
-        print(f"Error: R2A2 server did not become ready within {timeout} seconds.")
+        print(f"Error: MCS server did not become ready within {timeout} seconds.")
         return False
 
     async def configure_constraints_async(self, constraints: List[Dict[str, Any]]) -> bool:
         """
-        Asynchronously configures the safety constraints in the R2A2 subsystem.
+        Asynchronously configures the safety constraints in the MCS subsystem.
         """
         url = "/configure/constraints"
         try:
             response = await self.session.post(url, json=constraints)
             response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
-            print("R2A2 constraints configured successfully.")
+            print("MCS constraints configured successfully.")
             return response.json().get("status") == "success"
         except httpx.RequestError as e:
-            print(f"Error configuring R2A2 constraints: {e}")
+            print(f"Error configuring MCS constraints: {e}")
             return False
 
     async def deliberate_async(
@@ -79,7 +79,7 @@ class MCSClient:
             response.raise_for_status()
             return response.json()
         except httpx.RequestError as e:
-            print(f"Error during R2A2 deliberation: {e}")
+            print(f"Error during MCS deliberation: {e}")
             return None
 
     async def close(self):

@@ -1,5 +1,5 @@
 """
-Pydantic schemas for the R2A2 Subsystem API.
+Pydantic schemas for the MCS Subsystem API.
 
 This module defines the data structures used for request and response bodies
 in the FastAPI application, ensuring type safety and clear API contracts.
@@ -66,7 +66,7 @@ class PIDGains(BaseModel):
 class ConfigureSettingsRequest(BaseModel):
     """
     Request body for the POST /configure/settings endpoint.
-    Allows for tuning the internal hyperparameters of the R2A2 subsystem.
+    Allows for tuning the internal hyperparameters of the MCS subsystem.
     """
     dual_learning_rate: Optional[float] = Field(None, description="The learning rate (eta) for the Lagrange multiplier updates.")
     pid_gains: Optional[PIDGains] = Field(None, description="The P, I, and D gains for the dual variable update controller.")

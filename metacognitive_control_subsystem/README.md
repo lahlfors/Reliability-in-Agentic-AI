@@ -1,6 +1,6 @@
-# The R2A2 Modular Safety Subsystem
+# The MCS Modular Safety Subsystem
 
-This directory contains the source code for the Reflective Risk-Aware Agent Architecture (R2A2), a modular subsystem designed to provide a robust safety and governance layer for autonomous AI agents. The implementation is based on the provided Technical Design Document (TDD).
+This directory contains the source code for the Reflective metacognitive control subsystem (MCS), a modular subsystem designed to provide a robust safety and governance layer for autonomous AI agents. The implementation is based on Prand, T. (2024). *A Technical Design Document for a Metacognitive Control Subsystem (MCS) for Autonomous AI Agents*.
 
 ## Project Structure
 
@@ -14,9 +14,9 @@ This directory contains the source code for the Reflective Risk-Aware Agent Arch
 
 ---
 
-## Analysis of the R2A2 Technical Design Document
+## Analysis of the MCS Technical Design Document
 
-This analysis was performed on the TDD provided for the R2A2 subsystem.
+This analysis was performed on the TDD provided for the MCS subsystem.
 
 ### Pros
 
@@ -35,8 +35,8 @@ This analysis was performed on the TDD provided for the R2A2 subsystem.
 
 ### Final Recommendation
 
-**I highly recommend proceeding with the implementation of the R2A2 subsystem.**
+**I highly recommend proceeding with the implementation of the MCS subsystem.**
 
-While the challenges related to complexity and computational cost are real, they are necessary trade-offs for the profound level of safety and reliability the R2A2 architecture aims to provide. The risks associated with deploying highly autonomous agents are novel and severe, and they demand a principled, defense-in-depth solution exactly like the one proposed here. The TDD is exceptionally well-thought-out, addressing not just the primary problems but also subtle, second-order issues like reflective misalignment and optimization instability.
+While the challenges related to complexity and computational cost are real, they are necessary trade-offs for the profound level of safety and reliability the MCS architecture aims to provide. The risks associated with deploying highly autonomous agents are novel and severe, and they demand a principled, defense-in-depth solution exactly like the one proposed here. The TDD is exceptionally well-thought-out, addressing not just the primary problems but also subtle, second-order issues like reflective misalignment and optimization instability.
 
 The modular design is a key strategic advantage, as it allows for focused, iterative development and makes the final product broadly applicable. The implementation in this repository serves as a faithful and robust realization of the TDD's principles.

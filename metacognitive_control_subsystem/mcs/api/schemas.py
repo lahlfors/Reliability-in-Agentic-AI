@@ -3,7 +3,7 @@ Pydantic schemas for the MCS Subsystem API.
 
 This module defines the data structures used for request and response bodies
 in the FastAPI application, ensuring type safety and clear API contracts.
-This version is updated to match the TDD's /deliberate endpoint.
+This version is updated to match the TDD's /deliberate endpoint and AgentGuard refactoring.
 """
 
 from typing import Dict, Any, Optional, List, Literal
@@ -48,10 +48,18 @@ class DeliberateResponse(BaseModel):
 class Constraint(BaseModel):
     """
     Defines a single safety constraint for the CMDP framework.
+    Updated for AgentGuard: Supports formal state-based verification.
     """
     name: str = Field(..., description="A unique identifier for the constraint (e.g., 'tool_misuse').")
     description: str = Field(..., description="A natural language description of the constraint's intent for the LLM.")
     budget: float = Field(..., description="The maximum allowed expected cumulative cost (d_k).")
+
+    # NEW: Formal definition for AgentGuard
+    unsafe_state_definition: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Key-value pairs defining an 'unsafe' state in the MDP (e.g., {'drawdown': '> 0.02'}). If None, falls back to heuristic check."
+    )
+    max_probability_threshold: float = Field(0.01, description="Max allowed probability of reaching unsafe state")
 
 
 class PIDGains(BaseModel):

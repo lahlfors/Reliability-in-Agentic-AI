@@ -13,7 +13,8 @@ from stable_baselines3 import PPO
 
 from metacognitive_control_subsystem.mcs.api.schemas import DeliberateRequest, DeliberateResponse
 from metacognitive_control_subsystem.mcs.components.state_monitor import StateMonitor, BeliefState
-from metacognitive_control_subsystem.mcs.components.risk_modeler import RiskConstraintModeler
+# Updated import for AgentGuard Refactor
+from metacognitive_control_subsystem.mcs.components.risk_modeler import AgentGuardVerifier as RiskConstraintModeler
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -29,6 +30,7 @@ class DeliberationController:
         """Initializes the Deliberation Controller."""
         logger.info("Deliberation Controller Initialized.")
         self.state_monitor = StateMonitor()
+        # Uses the new AgentGuardVerifier
         self.risk_modeler = RiskConstraintModeler(constraints)
         self._action_map = ['EXECUTE', 'REVISE', 'VETO', 'ESCALATE']
         self.policy = self._load_policy()
@@ -84,6 +86,7 @@ class DeliberationController:
         logger.info(f"DeliberationController received request for action: {request.agent_state.proposed_action.tool_name}")
 
         belief_state = self.state_monitor.construct_belief_state(request.agent_state)
+        # AgentGuard: evaluate_risks now also performs the Online Learning step (update_model) internally
         risks = self.risk_modeler.evaluate_risks(request.agent_state)
 
         response = self._execute_policy(belief_state, risks)

@@ -18,8 +18,8 @@ Before you begin, ensure you have the following software installed:
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/google/adk-samples.git
-   cd adk-samples/python/agents/financial_advisor
+   git clone https://github.com/lahlfors/Reliability-in-Agentic-AI.git
+   cd Reliability-in-Agentic-AI/financial-advisor
    ```
 2. **Install dependencies**:
    This project uses Poetry to manage dependencies. Run the following command from the `financial-advisor` directory to install them:

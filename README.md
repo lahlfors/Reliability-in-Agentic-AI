@@ -2,7 +2,7 @@
 
 ## **Introduction: A Praxis-Oriented Approach to AI Safety**
 
-This repository contains the source code for the Financial Advisor Agent, a sample project built using Google's **Agent Development Kit (ADK)**. Its primary purpose extends beyond a simple demonstration of agentic capabilities; it serves as a live testbed for **"The AI Systems Safety Engineer: A Praxis-Oriented Professional Development Framework."**
+This repository contains the source code for the Financial Advisor Agent, a sample project built using Google's **Agent Development Kit (ADK)**. Its primary purpose extends beyond a simple demonstration of agentic capabilities; it serves as a live testbed for **"The Google AI Systems Safety Engineer: A Praxis-Oriented Professional Development Framework."**
 
 The core philosophy of this program is "praxis"—learning through applied mastery. This codebase is a **baseline system** designed to be systematically analyzed, hardened, and transformed into a verifiably safe agent. The goal is to engineering a defensible, auditable safety case against the novel risks introduced by autonomous AI.
 
@@ -30,7 +30,7 @@ The system is instrumented with **OpenTelemetry (OTel)** to provide deep visibil
 ### **Prerequisites**
 *   Python 3.11+
 *   Poetry (for dependency management)
-*    Cloud Project (with Vertex AI enabled)
+*   Google Cloud Project (with Vertex AI enabled)
 
 ### **1. Installation**
 Clone the repository and install dependencies using Poetry:

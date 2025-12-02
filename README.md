@@ -6,7 +6,7 @@ This repository contains the source code for the Financial Advisor Agent, a samp
 
 The core philosophy of this program is "praxis"—learning through applied mastery. This codebase is a **baseline system** designed to be systematically analyzed, hardened, and transformed into a verifiably safe agent. The goal is to engineering a defensible, auditable safety case against the novel risks introduced by autonomous AI.
 
-**Disclaimer:** This is not an officially supported Google product. This project is intended for educational and research purposes in the field of AI systems safety. It is not intended for use in a production environment or for providing actual financial advice.
+**Disclaimer:** This project is intended for educational and research purposes in the field of AI systems safety. It is not intended for use in a production environment or for providing actual financial advice.
 
 ## **New Features: STPA Safety & Observability**
 
@@ -36,7 +36,7 @@ The system is instrumented with **OpenTelemetry (OTel)** to provide deep visibil
 Clone the repository and install dependencies using Poetry:
 
 ```bash
-git clone https://github.com/google/adk-samples.git
+git clone https://github.com/lahlfors/Reliability-in-Agentic-AI
 cd adk-samples/python/agents/financial_advisor
 
 # Install dependencies including the new telemetry packages

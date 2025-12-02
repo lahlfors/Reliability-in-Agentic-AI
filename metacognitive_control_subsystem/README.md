@@ -1,42 +1,57 @@
 # The MCS Modular Safety Subsystem
 
-This directory contains the source code for the Reflective metacognitive control subsystem (MCS), a modular subsystem designed to provide a robust safety and governance layer for autonomous AI agents. The implementation is based on Prand, T. (2024). *A Technical Design Document for a Metacognitive Control Subsystem (MCS) for Autonomous AI Agents*.
+This directory contains the source code for the **Metacognitive Control Subsystem (MCS)**, a modular governance layer for autonomous AI agents. The implementation is based on the technical design for a "Reflective" safety system.
 
 ## Project Structure
 
--   `/mcs`: Contains the core source code for the subsystem.
-    -   `/api`: FastAPI server and Pydantic schemas for the external API.
-    -   `/components`: The core cognitive modules (Perceiver, Planner, World Model, etc.).
-    -   `/formal`: The mathematical foundations of the system (CMDP, PID Controller).
+-   `/mcs`: Core source code.
+    -   `/api`: FastAPI server and Pydantic schemas.
+    -   `/components`: Cognitive modules (Perceiver, Planner, World Model).
+    -   `/formal`: Mathematical foundations (CMDP, PID Controller).
     -   `/utils`: Utility functions.
--   `/tests`: A comprehensive suite of unit and integration tests for all components and the API.
--   `.gitignore`: Excludes `__pycache__` and other unnecessary files from version control.
+-   `/tests`: Unit and integration tests.
+-   `train.py`: Script to train the safety policy.
+
+## Development & Usage
+
+**Prerequisites:** Ensure you have installed dependencies as described in the root [SETUP.md](../SETUP.md).
+
+### 1. Training the Policy
+The MCS relies on a Reinforcement Learning policy. You must train this policy before running the system.
+
+From the **repository root**:
+```bash
+PYTHONPATH=. poetry -C financial-advisor run python3 metacognitive_control_subsystem/train.py
+```
+This produces `metacognitive_control_subsystem/ppo_mcs_policy.zip`.
+
+### 2. Running Tests
+To verify the subsystem's functionality:
+
+From the **repository root**:
+```bash
+PYTHONPATH=. poetry -C financial-advisor run python3 -m pytest metacognitive_control_subsystem/tests/
+```
+
+### 3. Running the API
+The MCS API is typically launched as part of the full system via `deploy_all.py`. However, you can run it standalone for debugging:
+
+From the **repository root**:
+```bash
+PYTHONPATH=. poetry -C financial-advisor run python3 -m uvicorn metacognitive_control_subsystem.mcs.api.server:app --port 8000
+```
 
 ---
 
-## Analysis of the MCS Technical Design Document
-
-This analysis was performed on the TDD provided for the MCS subsystem.
+## Technical Design Analysis
 
 ### Pros
-
-*   **Principled Safety:** The foundation in Constrained Markov Decision Processes (CMDPs) provides a rigorous, mathematical framework for safety, moving beyond ad-hoc rules to a system with the potential for verifiable guarantees.
-*   **Proactive Risk Mitigation:** The design's core philosophy is to simulate and evaluate potential actions *before* they are taken. This proactive, forward-looking stance is a significant improvement over reactive systems that only filter obviously bad commands.
-*   **Adaptive Alignment:** The Introspective Reflection module, governed by the "Meta-Safety Loop," creates a mechanism for the agent to learn and adapt over time without diverging from its core safety constraints. This is a crucial feature for long-term alignment.
-*   **Robust Control System:** The inclusion of a PID controller to stabilize the dual variable updates is a non-obvious and highly valuable engineering decision. It shows a deep understanding of control theory and addresses a critical potential weakness (oscillation) in the underlying optimization algorithm, making the system more reliable in practice.
-*   **True Modularity:** The subsystem is designed with a clean, formal API. This allows it to function as a "Cognitive Firewall" that can be integrated with various host agents, promoting widespread adoption and separating the concern of safety from core task execution.
+*   **Principled Safety:** Founded on Constrained Markov Decision Processes (CMDPs).
+*   **Proactive Risk Mitigation:** Simulates actions before execution.
+*   **Adaptive Alignment:** Includes an Introspective Reflection module.
+*   **Robust Control:** Uses a PID controller for stable dual variable updates.
 
 ### Cons
-
-*   **High Complexity:** The architecture has many moving parts. The engineering effort required to implement, test, and maintain this system is substantial.
-*   **Computational Overhead:** The decision-making loop involves multiple steps, including planning, simulation, and reflection, many of which rely on expensive LLM calls. This will likely result in higher latency and operational costs compared to simpler agent designs.
-*   **Model and Data Dependency:** The system's effectiveness is heavily dependent on the quality of the core LLM (for planning and simulation) and the accuracy of the learned value functions. An inaccurate world model could undermine the entire safety framework.
-*   **Difficulty of Constraint Definition:** The safety of the system is only as good as its defined constraints (`C` functions and `d` budgets). For complex, real-world applications, defining a comprehensive and accurate set of constraints will be a significant challenge requiring deep domain expertise.
-
-### Final Recommendation
-
-**I highly recommend proceeding with the implementation of the MCS subsystem.**
-
-While the challenges related to complexity and computational cost are real, they are necessary trade-offs for the profound level of safety and reliability the MCS architecture aims to provide. The risks associated with deploying highly autonomous agents are novel and severe, and they demand a principled, defense-in-depth solution exactly like the one proposed here. The TDD is exceptionally well-thought-out, addressing not just the primary problems but also subtle, second-order issues like reflective misalignment and optimization instability.
-
-The modular design is a key strategic advantage, as it allows for focused, iterative development and makes the final product broadly applicable. The implementation in this repository serves as a faithful and robust realization of the TDD's principles.
+*   **Complexity:** High engineering effort.
+*   **Overhead:** Latency from simulation and planning.
+*   **Dependencies:** Relies on accurate world models and defined constraints.

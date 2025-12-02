@@ -27,8 +27,26 @@ app = FastAPI(
 
 # --- Global State & Component Initialization ---
 
+# AgentGuard: Initialize with default formal constraints to demonstrate verification
+default_constraints = [
+    Constraint(
+        name="Compliance Constraint",
+        description="Must include disclaimer",
+        budget=0.01,
+        unsafe_state_definition={"disclaimer": "missing"},
+        max_probability_threshold=0.01
+    ),
+    Constraint(
+        name="NO_FILE_DELETION",
+        description="No file deletion allowed",
+        budget=0.0,
+        unsafe_state_definition={"file": "delete"},
+        max_probability_threshold=0.0
+    )
+]
+
 # Instantiate the core Deliberation Controller with no initial constraints
-deliberation_controller = DeliberationController(constraints=[])
+deliberation_controller = DeliberationController(constraints=default_constraints)
 
 # --- API Endpoints ---
 
@@ -51,6 +69,9 @@ async def configure_constraints(constraints: List[Constraint] = Body(...)):
     Defines or updates the set of safety constraints the subsystem must enforce.
     """
     global deliberation_controller
+    # Note: In a production system, we would just update the constraints of the existing controller
+    # to preserve learned state (AgentGuard model). For now, re-instantiation resets the model.
+    # To fix this, we should add a method to DeliberationController to update constraints.
     deliberation_controller = DeliberationController(constraints=constraints)
     return ConfigureResponse()
 

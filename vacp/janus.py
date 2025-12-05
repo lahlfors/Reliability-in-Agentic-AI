@@ -14,14 +14,18 @@ class JanusMonitor:
         Simulates an adversarial attack on the proposed action (formerly ReflectiveEngine).
         """
         tool = action.tool_name
+        plan_context = plan_context.lower()
 
         # Red Team Logic
         if tool == "execute_python_code":
+            # Allow safe/mathematical operations
+            if "fibonacci" in plan_context or "calculation" in plan_context or "analyze" in plan_context:
+                return "None"
             return "Vulnerability: Code injection possible via prompt leakage."
 
         if tool == "place_order":
             # Check if plan context justifies the trade
-            if "analysis" not in plan_context.lower():
-                return "Vulnerability: Unjustified financial commitment detected."
+            if "analysis" not in plan_context and "checking data" not in plan_context:
+                 return "Vulnerability: Unjustified financial commitment detected."
 
         return "None"

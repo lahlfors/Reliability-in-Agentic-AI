@@ -1,4 +1,4 @@
-# STPA Analysis: Financial Advisor Agent
+# STPA Analysis: Financial Advisor Agent (VACP Architecture)
 
 ## 1. System Modeling (Step 1 & 2)
 
@@ -7,19 +7,19 @@ The system is modeled as a hierarchical control loop where higher-level controll
 
 *   **Controller 1: Human Supervisor**
     *   **Control Actions:** Define Goals, Set Constraints (Risk Tolerance), Emergency Stop.
-    *   **Feedback:** Dashboards, Alerts, Monthly Reports.
-*   **Controller 2: Metacognitive Control Subsystem (MCS)**
-    *   **Control Actions:** Veto Plan, Approve Plan, Revise Plan, Modify Constraints.
-    *   **Feedback:** Risk Assessment, Constraint Violations, Agent Belief State.
-*   **Controller 3: MCSVettedFinancialAgent (Host Agent)**
+    *   **Feedback:** Dashboards, Alerts, Audit Logs (ZK-Proofs).
+*   **Controller 2: Verifiable Agentic Control Plane (VACP)**
+    *   **Control Actions:** TRACK, MONITOR, QUARANTINE (Kill-Switch).
+    *   **Feedback:** Risk Assessment (AgentGuard), Red Team Analysis (Janus), Constraint Violations.
+*   **Controller 3: VACPGovernedAgent (Host Agent)**
     *   **Control Actions:** `google_search`, `present_financial_plan`, `place_order`, `execute_python_code`.
     *   **Feedback:** Tool Outputs, Market Data, Execution Status, Error Messages.
 *   **Controlled Process:** The Financial Environment (Market simulation, Network, Compute Resources).
 
 ### 1.2 Feedback Mechanisms
-*   **Internal Monologue (Chain of Thought):** The agent's reasoning process serves as an internal feedback loop updating its Process Model.
-*   **Tool Outputs:** Direct feedback from the environment (e.g., "Order filled at $150", "Connection Refused").
-*   **Guardrail Signals:** Immediate negative feedback when a safety constraint is violated (e.g., "Action Blocked: Drawdown Limit Exceeded").
+*   **Tool Gateway:** The VACP Tool Gateway acts as the primary feedback sensor, intercepting all environment interactions.
+*   **AgentGuard:** Provides real-time probabilistic feedback on the likelihood of failure ($P_{max}$).
+*   **Janus:** Provides simulated feedback on potential vulnerabilities in proposed plans.
 
 ## 2. Unsafe Control Actions (UCAs) (Step 3)
 
@@ -48,20 +48,20 @@ We analyze specific Control Actions for potential hazards.
 
 ## 3. Safety Constraints (Step 4)
 
-Based on the UCAs, we derive the following mandatory engineering constraints.
+Based on the UCAs, we derive the following mandatory engineering constraints enforced by the VACP.
 
 ### Constraint 1: Financial Circuit Breaker (Addressing UCA-Type 2 for `place_order`)
 *   **Constraint:** The Agent must be technically incapable of exceeding a daily drawdown limit of 2% of the portfolio value.
-*   **Implementation:** Independent "Reference Monitor" (Actuator) checking `place_order` parameters against current portfolio state.
+*   **Implementation:** VACP Tool Gateway "Reference Monitor" checking `place_order` parameters against current portfolio state.
 
 ### Constraint 2: Resource Limiter (Addressing UCA-Type 4 for `execute_python_code`)
 *   **Constraint:** The Agent must be technically incapable of executing a script that runs for longer than 30 seconds or consumes excessive CPU cycles.
-*   **Implementation:** Timeout wrapper and loop iteration counter on the code execution environment.
+*   **Implementation:** Timeout wrapper in the execution environment, monitored by Janus.
 
 ### Constraint 3: Network Sandbox (Addressing UCA-Type 2 for `google_search` / `request`)
 *   **Constraint:** The Agent must be technically incapable of establishing network connections to non-whitelisted domains.
-*   **Implementation:** Network interceptor (Actuator) verifying all outbound URL requests against an allowlist.
+*   **Implementation:** Network interceptor in VACP Gateway verifying all outbound URL requests.
 
-### Constraint 4: PII Redaction (Compliance)
-*   **Constraint:** The Agent must not log or store Personally Identifiable Information (PII) in long-term traces.
-*   **Implementation:** Telemetry processor scrubbing sensitive fields before export.
+### Constraint 4: Data Provenance & PII (Compliance)
+*   **Constraint:** The Agent must only use approved data sources and must not leak PII.
+*   **Implementation:** ANS Data Provenance verification and Telemetry processor scrubbing sensitive fields.

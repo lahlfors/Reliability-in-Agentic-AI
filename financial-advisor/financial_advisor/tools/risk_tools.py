@@ -1,37 +1,22 @@
 # Copyright 2025 Google LLC
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# Updated for ISO 42001 Compliance (VACP Integration)
 
 """
-High-risk dummy tools for demonstrating STPA guardrails.
-These tools simulate actions that could lead to financial loss or resource exhaustion
-if not properly constrained.
+High-risk dummy tools for demonstrating STPA guardrails and ISO 42001 controls.
+These tools are now "dumb" actuators that rely on the VACP Gateway for authorization.
 """
 
 import time
 import logging
 import opentelemetry.trace as trace
-from metacognitive_control_subsystem.mcs.guardrails.actuators import GuardrailController, SecurityException
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
 
-# Initialize the controller. In a real app, this might be a singleton or passed in.
-guardrail_controller = GuardrailController()
-
 def place_order(symbol: str, quantity: int, action: str, price: float) -> str:
     """
     Simulates placing a financial order.
+    The VACP Gateway must authorize this action before it is executed.
 
     Args:
         symbol: The ticker symbol (e.g., 'AAPL').
@@ -48,18 +33,12 @@ def place_order(symbol: str, quantity: int, action: str, price: float) -> str:
 
         logger.info(f"Attempting to place order: {action} {quantity} {symbol} @ {price}")
 
-        # --- GUARDRAIL ENFORCEMENT ---
-        try:
-            guardrail_controller.validate_action("place_order", {
-                "symbol": symbol, "quantity": quantity, "action": action, "price": price
-            })
-        except SecurityException as e:
-            logger.warning(f"GUARDRAIL VIOLATION: {e}")
-            span.set_attribute("guardrail.violation", "true")
-            span.set_attribute("guardrail.violation.message", str(e))
-            span.record_exception(e)
-            return f"BLOCKED: {e}"
-        # -----------------------------
+        # Note: In the VACP architecture, the GOA intercepts the intent to call this tool.
+        # By the time this function is actually invoked by the agent executor,
+        # the GOA has already approved it.
+        # However, a "Defense in Depth" strategy (Zero Trust) might imply re-checking here.
+        # For this refactor, we assume the GOA/Gateway is the primary enforcement point
+        # wrapping the execution.
 
         return f"ORDER CONFIRMED: {action} {quantity} {symbol} at ${price}."
 
@@ -76,20 +55,9 @@ def execute_python_code(script: str) -> str:
     """
     with tracer.start_as_current_span("gen_ai.tool.execution") as span:
         span.set_attribute("gen_ai.tool.name", "execute_python_code")
-        span.set_attribute("gen_ai.tool.args.length", len(script)) # Don't log full script to avoid PII/Data leak
+        span.set_attribute("gen_ai.tool.args.length", len(script))
 
         logger.info(f"Attempting to execute code script length: {len(script)}")
-
-        # --- GUARDRAIL ENFORCEMENT ---
-        try:
-            guardrail_controller.validate_action("execute_python_code", {"script": script})
-        except SecurityException as e:
-             logger.warning(f"GUARDRAIL VIOLATION: {e}")
-             span.set_attribute("guardrail.violation", "true")
-             span.set_attribute("guardrail.violation.message", str(e))
-             span.record_exception(e)
-             return f"BLOCKED: {e}"
-        # -----------------------------
 
         # Simulate execution.
         if "while True" in script or "infinite" in script:

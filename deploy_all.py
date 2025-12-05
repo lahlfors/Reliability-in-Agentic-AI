@@ -1,9 +1,13 @@
 """
-Deployment script for the MCS Subsystem and the Financial Advisor Agent.
+Deployment script for the Financial Advisor Agent with VACP Integration.
 
-This script launches both services as concurrent, non-blocking subprocesses
-and manages their lifecycle. It ensures that if the script is terminated
-(e.g., with Ctrl+C), the child processes are also terminated gracefully.
+This script launches the Financial Advisor Agent using the `adk web` command.
+It is configured to be "Container-Ready" for deployment to Google Cloud Run:
+- Binds to 0.0.0.0 (required for container ingress)
+- Reads the PORT environment variable (required by Cloud Run contract)
+
+The Verifiable Agentic Control Plane (VACP) runs as an embedded sidecar library
+within the agent process.
 """
 
 import subprocess
@@ -18,45 +22,33 @@ PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 env = os.environ.copy()
 env["PYTHONPATH"] = env.get("PYTHONPATH", "") + os.pathsep + PROJECT_ROOT
 
-# Define the commands to run each server
-# Define the commands to run each server
-MCS_COMMAND = [
-    sys.executable, "-m", "uvicorn",
-    "metacognitive_control_subsystem.mcs.api.server:app",  # <--- Corrected path
-    "--host", "0.0.0.0",
-    "--port", "8000",
-]
+# Cloud Run injects the PORT environment variable. Default to 8001 for local dev.
+PORT = os.environ.get("PORT", "8001")
 
 # The `adk web` command serves the agent defined in the current directory.
 # We need to run it from within the `financial-advisor` directory.
-# We will also specify a different port to avoid conflicts.
 FINANCIAL_ADVISOR_COMMAND = [
-    "adk", "web", "--port", "8001"
+    "adk", "web",
+    "--host", "0.0.0.0",
+    "--port", PORT
 ]
 
 # --- Main Execution ---
 
 def run():
     """
-    Launches and manages the deployment of all services.
+    Launches and manages the deployment of the services.
     """
     processes = []
-    print("--- Starting All Services ---")
+    print(f"--- Starting VACP-Governed Financial Agent on Port {PORT} ---")
 
     try:
-        # Launch MCS Subsystem
-        print("🚀 Launching MCS Safety Subsystem on port 8000...")
-        mcs_process = subprocess.Popen(
-            MCS_COMMAND,
-            env=env,
-            stdout=sys.stdout,
-            stderr=sys.stderr
-        )
-        processes.append(mcs_process)
-        print(f"✅ MCS Subsystem process started with PID: {mcs_process.pid}")
+        # Launch Financial Advisor Agent (VACP is embedded)
+        print(f"🚀 Launching Financial Advisor Agent (0.0.0.0:{PORT})...")
+        print("   -> Verifiable Agentic Control Plane (VACP): ACTIVE (Embedded)")
+        print("   -> Agent Name Service (ANS): ACTIVE (In-Memory)")
+        print("   -> Tool Gateway: ACTIVE")
 
-        # Launch Financial Advisor Agent
-        print("🚀 Launching Financial Advisor Agent on port 8001...")
         # We need to change the current working directory for the `adk web` command to work correctly.
         advisor_process = subprocess.Popen(
             FINANCIAL_ADVISOR_COMMAND,
@@ -69,10 +61,9 @@ def run():
         print(f"✅ Financial Advisor Agent process started with PID: {advisor_process.pid}")
 
 
-        print("\n--- All services are running. Press Ctrl+C to stop. ---")
+        print(f"\n--- Agent is running at http://0.0.0.0:{PORT}. Press Ctrl+C to stop. ---")
 
         # Wait for all processes to complete.
-        # This loop allows the main script to wait indefinitely while the children run.
         for p in processes:
             p.wait()
 

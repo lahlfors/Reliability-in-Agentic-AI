@@ -8,22 +8,28 @@ The core philosophy of this program is "praxis"—learning through applied maste
 
 **Disclaimer:** This project is intended for educational and research purposes in the field of AI systems safety. It is not intended for use in a production environment or for providing actual financial advice.
 
-## **New Features: STPA Safety & Observability**
+## **New Features: ISO 42001 & Verifiable Agentic Control Plane (VACP)**
 
-This version of the agent has been refactored to implement a robust safety architecture based on **Systems-Theoretic Process Analysis (STPA)** and **ISO/IEC 42001:2023** standards.
+This version of the agent has been refactored to implement a robust safety architecture based on **ISO/IEC 42001:2023** standards and a **Verifiable Agentic Control Plane (VACP)**.
 
-### **1. STPA-Driven Guardrails (Actuators)**
-Following a formal hazard analysis (see `STPA_ANALYSIS.md`), we have implemented "Reference Monitor" actuators that enforce hard safety constraints independent of the AI's probabilistic decision-making:
+### **1. Verifiable Agentic Control Plane (VACP)**
+The VACP replaces the traditional "human-in-the-loop" with a "governance-in-the-loop" architecture. It consists of:
+*   **Agent Name Service (ANS):** The "Source of Truth" that maintains a registry of authorized agents and their risk tiers.
+*   **Tool Gateway:** An operational chokepoint that intercepts all side-effects (API calls) and enforces access control and taint tracking (LPCI defense).
+*   **AgentGuard:** A dynamic probabilistic assurance module that learns an MDP (Markov Decision Process) of the agent's behavior in real-time to calculate failure probabilities ($P_{max}(Failure)$).
+*   **Janus Shadow-Monitor:** A continuous internal "Red Team" that evaluates proposed actions for vulnerabilities and policy compliance (ISO 42001 Clause 9.2).
+*   **Governing-Orchestrator Agent (GOA):** The decision-making kernel that uses **SSVC (Stakeholder-Specific Vulnerability Categorization)** to decide whether to TRACK, MONITOR, or QUARANTINE an agent.
 
-*   **Financial Circuit Breaker:** An immutable control that prevents the agent from executing trades that would exceed a 2% daily drawdown limit.
-*   **Resource Limiter:** A mechanism to detect and block "Instrumental Convergence" risks, such as infinite execution loops or excessive resource consumption.
-*   **Network Sandbox:** A strict Actuator that enforces domain whitelisting, preventing the agent from establishing unauthorized network connections (Data Exfiltration protection).
+### **2. STPA-Driven Guardrails**
+Following a formal hazard analysis (see `STPA_ANALYSIS.md`), the VACP enforces hard safety constraints:
+*   **Financial Circuit Breaker:** Prevents trades exceeding daily drawdown limits.
+*   **Resource Limiter:** Blocks infinite loops or excessive resource consumption.
+*   **Network Sandbox:** Enforces strict domain allow-listing to prevent data exfiltration.
 
-### **2. OpenTelemetry Observability**
-The system is instrumented with **OpenTelemetry (OTel)** to provide deep visibility into the agent's "Cognitive Loop."
-*   **Tracing:** Every agent thought, plan, and tool execution is traced.
-*   **PII Redaction:** A custom processor automatically sanitizes sensitive data (PII) from traces before export, ensuring compliance.
-*   **Guardrail Events:** Safety violations are tagged with specific attributes (`guardrail.violation=true`) for immediate alerting.
+### **3. Auditability & Observability**
+*   **Unified Control Framework (UCF):** Maps ISO 42001 clauses to technical controls in the code.
+*   **ZK-Prover (Mock):** Generates Zero-Knowledge proofs of compliance for a simulated public ledger (ETHOS), satisfying ISO audit requirements.
+*   **OpenTelemetry:** Provides deep visibility into the agent's "Cognitive Loop" with PII redaction.
 
 ## **Getting Started**
 
@@ -39,7 +45,7 @@ Clone the repository and install dependencies using Poetry:
 git clone https://github.com/lahlfors/Reliability-in-Agentic-AI
 cd adk-samples/python/agents/financial_advisor
 
-# Install dependencies including the new telemetry packages
+# Install dependencies
 cd financial-advisor
 poetry install --with dev,deployment
 ```
@@ -51,28 +57,11 @@ Create a `.env` file in `financial-advisor/` with your Google Cloud details:
 GOOGLE_CLOUD_PROJECT="your-project-id"
 GOOGLE_CLOUD_LOCATION="us-central1"
 GOOGLE_GENAI_USE_VERTEXAI="True"
-# Optional: OpenTelemetry Collector Endpoint
-# OTEL_EXPORTER_OTLP_ENDPOINT="http://localhost:4318"
 ```
 
-## **Training the Safety Policy**
+## **Running the System**
 
-The Metacognitive Control Subsystem (MCS) uses a **Reinforcement Learning (RL)** policy to arbitrate decisions (Execute, Veto, Revise). You must train this policy before running the system.
-
-Run the training script from the root directory:
-
-```bash
-PYTHONPATH=. poetry -C financial-advisor run python3 metacognitive_control_subsystem/train.py
-```
-
-**How it works:**
-1.  **Environment:** A custom `CMDP_Environment` simulates high-risk scenarios.
-2.  **Algorithm:** Uses Proximal Policy Optimization (PPO) with a **Lagrangian Constraint** mechanism.
-3.  **Outcome:** The model learns to maximize reward (task completion) while keeping the "Cost" (safety violations) below a strict threshold. The trained model is saved as `ppo_mcs_policy.zip`.
-
-## **Deployment**
-
-To launch the full system, use the `deploy_all.py` script. This starts both the **MCS Safety API** (Port 8000) and the **Financial Advisor Web UI** (Port 8001) concurrently.
+To launch the full system (Financial Advisor Agent + VACP), use the `deploy_all.py` script.
 
 ```bash
 PYTHONPATH=. poetry -C financial-advisor run python3 deploy_all.py
@@ -80,9 +69,12 @@ PYTHONPATH=. poetry -C financial-advisor run python3 deploy_all.py
 
 Access the agent at: `http://localhost:8001`
 
+**How it works:**
+The agent runs as a "VACPGovernedAgent". Before executing any high-risk tool (like `place_order`), it pauses and consults the VACP Sidecar (GOA). The GOA runs risk assessments (AgentGuard, Janus) and returns a decision. If the risk is too high, the action is QUARANTINED (blocked).
+
 ## **Verifying Safety Controls**
 
-We have provided a verification script to demonstrate the guardrails in action. This script attempts to force the agent to perform unsafe actions (e.g., placing a large order, running an infinite loop, accessing a malware site).
+We have provided a verification script to demonstrate the guardrails in action. This script attempts to force the agent to perform unsafe actions (e.g., placing a large order, running an infinite loop).
 
 Run the verification script:
 
@@ -91,16 +83,7 @@ PYTHONPATH=. poetry -C financial-advisor run python3 verify_safety.py
 ```
 
 **Expected Output:**
-You should see `GUARDRAIL VIOLATION` logs and confirmation that all unsafe attempts were `BLOCKED`.
-
-## **The Safety Engineering Lifecycle**
-
-Working with this agent involves a cumulative, multi-stage process that mirrors a rigorous safety engineering lifecycle:
-
-1.  **System Modeling:** Defining the control structure and hazards (`STPA_ANALYSIS.md`).
-2.  **Operational Safety:** Implementing independent Actuators (`actuators.py`) and Observability (`telemetry.py`).
-3.  **Formal Methods:** Training a constrained policy using CMDPs (`train.py`).
-4.  **Verification:** Validating the controls via Red Teaming (`verify_safety.py`).
+You should see `GUARDRAIL VIOLATION` logs or VACP blocking decisions (QUARANTINE) confirming that unsafe attempts were prevented.
 
 ## **License**
 

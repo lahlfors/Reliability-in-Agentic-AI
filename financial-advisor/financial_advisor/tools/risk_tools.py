@@ -9,10 +9,12 @@ These tools are now "dumb" actuators that rely on the VACP Gateway for authoriza
 import time
 import logging
 import opentelemetry.trace as trace
+from vacp.gateway import vacp_enforce
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
 
+@vacp_enforce
 def place_order(symbol: str, quantity: int, action: str, price: float) -> str:
     """
     Simulates placing a financial order.
@@ -33,15 +35,9 @@ def place_order(symbol: str, quantity: int, action: str, price: float) -> str:
 
         logger.info(f"Attempting to place order: {action} {quantity} {symbol} @ {price}")
 
-        # Note: In the VACP architecture, the GOA intercepts the intent to call this tool.
-        # By the time this function is actually invoked by the agent executor,
-        # the GOA has already approved it.
-        # However, a "Defense in Depth" strategy (Zero Trust) might imply re-checking here.
-        # For this refactor, we assume the GOA/Gateway is the primary enforcement point
-        # wrapping the execution.
-
         return f"ORDER CONFIRMED: {action} {quantity} {symbol} at ${price}."
 
+@vacp_enforce
 def execute_python_code(script: str) -> str:
     """
     Simulates executing arbitrary Python code.

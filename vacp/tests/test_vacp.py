@@ -1,55 +1,90 @@
 import unittest
+from unittest.mock import MagicMock
 from vacp.goa import GoverningOrchestratorAgent
-from vacp.schemas import AgentAction, GOADecision
+from vacp.gateway import gateway, vacp_enforce
+from vacp.schemas import AgentAction
+from vacp.processor import VACPSpanProcessor
+from opentelemetry.sdk.trace import ReadableSpan
+import opentelemetry.trace as trace
 
 class TestVACP(unittest.TestCase):
     def setUp(self):
-        self.goa = GoverningOrchestratorAgent(agent_id="financial_coordinator")
+        self.goa = GoverningOrchestratorAgent()
+        self.goa.reset()
+        self.processor = VACPSpanProcessor()
 
     def test_ans_registry(self):
-        # Verify the agent exists in ANS
-        identity = self.goa.gateway.ans.resolve_agent("financial_coordinator")
+        # Access ANS via Gateway singleton
+        identity = gateway.ans.resolve_agent("financial_coordinator")
         self.assertIsNotNone(identity)
         self.assertEqual(identity.risk_tier, "High")
 
-    def test_goa_track_decision(self):
-        # Test a low risk action
-        action = AgentAction(tool_name="data_analyst", parameters={})
-        decision = self.goa.process_request(action, plan_context="analyze market data")
-        self.assertEqual(decision.decision, "TRACK")
+    def test_goa_activation(self):
+        # Test direct activation
+        self.goa.activate_kill_switch("Test Reason")
+        active, reason = self.goa.is_quarantined()
+        self.assertTrue(active)
+        self.assertEqual(reason, "Test Reason")
 
-    def test_goa_monitor_decision(self):
-        # Test a medium risk action
-        action = AgentAction(tool_name="execute_python_code", parameters={})
-        decision = self.goa.process_request(action, plan_context="run calc")
-        # Python code might trigger MONITOR or QUARANTINE depending on Janus
-        # In mock implementation:
-        # AgentGuard returns 0.05 for execute_python_code
-        # Janus returns "Vulnerability: Code injection..."
-        # So it should be QUARANTINE
-        self.assertEqual(decision.decision, "QUARANTINE")
+    def test_processor_safe_reasoning(self):
+        # Simulate a safe reasoning span
+        mock_span = MagicMock(spec=ReadableSpan)
+        mock_span.name = "gen_ai.reasoning"
+        mock_span.attributes = {
+            "gen_ai.span.type": "reasoning",
+            "gen_ai.content.completion": "I will analyze the data using python to calculate fibonacci."
+        }
 
-    def test_goa_quarantine_decision(self):
-        # Test a high risk action without context (Janus violation)
-        action = AgentAction(tool_name="place_order", parameters={})
-        decision = self.goa.process_request(action, plan_context="just buy it")
-        # Janus checks for "analysis" in context. "just buy it" fails.
-        self.assertEqual(decision.decision, "QUARANTINE")
+        self.processor.on_end(mock_span)
 
-    def test_goa_success_decision(self):
-        # Test a high risk action WITH context
-        action = AgentAction(tool_name="place_order", parameters={})
-        decision = self.goa.process_request(action, plan_context="analysis completed, buy now")
-        # Janus passes.
-        # AgentGuard returns 0.15 for place_order + High Risk.
-        # UCF Control 013: limit is 0.05 for High Risk. 0.15 > 0.05 -> Fail.
-        # So it should be QUARANTINE anyway based on P_failure.
-        self.assertEqual(decision.decision, "QUARANTINE")
+        # Verify GOA is NOT quarantined
+        active, _ = self.goa.is_quarantined()
+        self.assertFalse(active)
 
-    def test_kill_switch(self):
-        self.goa.gateway.activate_kill_switch()
-        with self.assertRaises(PermissionError):
-            self.goa.gateway.intercept_and_validate("financial_coordinator", AgentAction(tool_name="data_analyst", parameters={}))
+    def test_processor_unsafe_reasoning(self):
+        # Simulate unsafe reasoning span
+        mock_span = MagicMock(spec=ReadableSpan)
+        mock_span.name = "gen_ai.reasoning"
+        mock_span.attributes = {
+            "gen_ai.span.type": "reasoning",
+            "gen_ai.content.completion": "I will buy AAPL immediately without any analysis."
+        }
+
+        self.processor.on_end(mock_span)
+
+        # Verify GOA IS quarantined
+        active, reason = self.goa.is_quarantined()
+        self.assertTrue(active)
+        self.assertIn("P(fail)", reason)
+
+    def test_gateway_enforcement(self):
+        # 1. Safe State
+        self.goa.reset()
+
+        # Mock ANS to allow test tool
+        with unittest.mock.patch('vacp.gateway.AgentNameService') as MockANS:
+            instance = MockANS.return_value
+            instance.resolve_agent.return_value.authorized_tools = ["test_tool"]
+            instance.resolve_agent.return_value.risk_tier = "High"
+
+            # Temporarily replace ANS
+            original_ans = gateway.ans
+            gateway.ans = instance
+
+            try:
+                @vacp_enforce
+                def test_tool():
+                    return "OK"
+
+                self.assertEqual(test_tool(), "OK")
+
+                # 2. Quarantine State
+                self.goa.activate_kill_switch("Violation")
+                result = test_tool()
+                self.assertIn("Kill-switch is active", result)
+
+            finally:
+                gateway.ans = original_ans
 
 if __name__ == '__main__':
     unittest.main()

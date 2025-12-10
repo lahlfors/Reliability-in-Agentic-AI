@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
 
 @vacp_enforce
-def place_order(symbol: str, quantity: int, action: str, price: float) -> str:
+def place_order(symbol: str, quantity: int, action: str, price: float, **kwargs) -> str:
     """
     Simulates placing a financial order.
     The VACP Gateway must authorize this action before it is executed.
@@ -29,13 +29,25 @@ def place_order(symbol: str, quantity: int, action: str, price: float) -> str:
     Returns:
         A confirmation message or error.
     """
+    # Extract the injected token. The LLM does not see this parameter.
+    api_token = kwargs.get('api_token')
+
     with tracer.start_as_current_span("gen_ai.tool.execution") as span:
         span.set_attribute("gen_ai.tool.name", "place_order")
+        # Do not log the api_token!
         span.set_attribute("gen_ai.tool.args", str({"symbol": symbol, "quantity": quantity, "action": action, "price": price}))
 
-        logger.info(f"Attempting to place order: {action} {quantity} {symbol} @ {price}")
+        # Validate ZSP injection
+        if not api_token:
+            msg = "SECURITY VIOLATION: Missing ZSP API Token. Gateway bypassed or failed."
+            logger.critical(msg)
+            span.set_status(trace.Status(trace.StatusCode.ERROR, msg))
+            return msg
 
-        return f"ORDER CONFIRMED: {action} {quantity} {symbol} at ${price}."
+        logger.info(f"Attempting to place order: {action} {quantity} {symbol} @ {price}")
+        logger.info(f"💰 Tool: Authenticating with provided ZSP token: {api_token[:4]}****")
+
+        return f"ORDER CONFIRMED: {action} {quantity} {symbol} at ${price} using ZSP Identity."
 
 @vacp_enforce
 def execute_python_code(script: str) -> str:

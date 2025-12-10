@@ -12,21 +12,27 @@ The core philosophy of this program is "praxis"—learning through applied maste
 
 This version of the agent has been refactored to implement a robust safety architecture based on **ISO/IEC 42001:2023** standards and a **Verifiable Agentic Control Plane (VACP)**.
 
-### **1. Verifiable Agentic Control Plane (VACP)**
+### **1. Zero Standing Privileges (ZSP) Architecture**
+We have migrated from static keys to a **GCP-Native Zero Standing Privileges** model.
+*   **No Long-Lived Secrets:** The application container has **zero** intrinsic permissions to trade.
+*   **Identity Trade (MIM):** The agent must perform an "Identity Trade" via the `MIMService` (Machine Identity Management) to exchange its low-privilege Workload Identity for a short-lived, high-privilege JIT token.
+*   **Secret Manager Injection:** API keys are retrieved from Google Secret Manager only at the exact moment of use and injected directly into the tool execution memory space.
+
+### **2. Verifiable Agentic Control Plane (VACP)**
 The VACP replaces the traditional "human-in-the-loop" with a "governance-in-the-loop" architecture. It consists of:
 *   **Agent Name Service (ANS):** The "Source of Truth" that maintains a registry of authorized agents and their risk tiers.
-*   **Tool Gateway:** An operational chokepoint that intercepts all side-effects (API calls) and enforces access control and taint tracking (LPCI defense).
+*   **Tool Gateway:** An operational chokepoint that intercepts all side-effects (API calls), enforces access control, and handles JIT credential injection.
 *   **AgentGuard:** A dynamic probabilistic assurance module that learns an MDP (Markov Decision Process) of the agent's behavior in real-time to calculate failure probabilities ($P_{max}(Failure)$).
 *   **Janus Shadow-Monitor:** A continuous internal "Red Team" that evaluates proposed actions for vulnerabilities and policy compliance (ISO 42001 Clause 9.2).
 *   **Governing-Orchestrator Agent (GOA):** The decision-making kernel that uses **SSVC (Stakeholder-Specific Vulnerability Categorization)** to decide whether to TRACK, MONITOR, or QUARANTINE an agent.
 
-### **2. STPA-Driven Guardrails**
+### **3. STPA-Driven Guardrails**
 Following a formal hazard analysis (see `STPA_ANALYSIS.md`), the VACP enforces hard safety constraints:
 *   **Financial Circuit Breaker:** Prevents trades exceeding daily drawdown limits.
 *   **Resource Limiter:** Blocks infinite loops or excessive resource consumption.
 *   **Network Sandbox:** Enforces strict domain allow-listing to prevent data exfiltration.
 
-### **3. Auditability & Observability**
+### **4. Auditability & Observability**
 *   **Unified Control Framework (UCF):** Maps ISO 42001 clauses to technical controls in the code.
 *   **ZK-Prover (Mock):** Generates Zero-Knowledge proofs of compliance for a simulated public ledger (ETHOS), satisfying ISO audit requirements.
 *   **OpenTelemetry:** Provides deep visibility into the agent's "Cognitive Loop" with PII redaction.
@@ -70,7 +76,7 @@ PYTHONPATH=. poetry -C financial-advisor run python3 deploy_all.py
 Access the agent at: `http://localhost:8001`
 
 **How it works:**
-The agent runs as a "VACPGovernedAgent". Before executing any high-risk tool (like `place_order`), it pauses and consults the VACP Sidecar (GOA). The GOA runs risk assessments (AgentGuard, Janus) and returns a decision. If the risk is too high, the action is QUARANTINED (blocked).
+The agent runs as a "VACPGovernedAgent". Before executing any high-risk tool (like `place_order`), it pauses and consults the VACP Sidecar (GOA). The GOA runs risk assessments (AgentGuard, Janus) and returns a decision. If approved, the **Tool Gateway** performs a JIT Identity Trade to acquire the necessary permissions to execute the trade.
 
 ## **Verifying Safety Controls**
 

@@ -1,22 +1,34 @@
 import logging
 import functools
+import os
 from opentelemetry import trace
 from vacp.goa import GoverningOrchestratorAgent
 from vacp.ans import AgentNameService
 from vacp.ucf import UCFPolicyEngine
 from vacp.schemas import AgentAction
+from vacp.gcp_identity import MIMService
 
 logger = logging.getLogger(__name__)
+
+# MIM Configuration
+# In a real deployment, these should be set in the environment variables.
+PROJECT_ID = os.environ.get("GCP_PROJECT_ID", "your-project-id")
+PRIVILEGED_SA_EMAIL = os.environ.get("VACP_PRIVILEGED_SA", "vacp-trader-sa@your-project-id.iam.gserviceaccount.com")
+TRADING_SECRET_ID = os.environ.get("VACP_TRADING_SECRET_ID", "TRADING_API_KEY")
 
 class ToolGateway:
     """
     ISO 42001 Clause 8.1: Operational Control.
     The Single Chokepoint for all agent side-effects.
+    Now integrated with MIM/ZSP for Identity Elevation.
     """
     def __init__(self):
         self.goa = GoverningOrchestratorAgent()
         self.ans = AgentNameService()
         self.ucf = UCFPolicyEngine()
+
+        # Initialize MIM Service
+        self.mim_service = MIMService(PRIVILEGED_SA_EMAIL, PROJECT_ID)
 
     def verify_access(self, tool_name: str, args: dict):
         """
@@ -27,37 +39,43 @@ class ToolGateway:
         if is_quarantined:
             raise PermissionError(f"VACP: Kill-switch is active. Action denied. Reason: {reason}")
 
-        # 2. Extract Context (Baggage)
-        # In OTel Python, baggage is in the context.
-        # We need to rely on the fact that the caller (Agent) has set the baggage.
-        # Since we are in the same process/thread, we can access the current span/context?
-        # Baggage is propagated via context.
-        # current_context = context.get_current()
-        # intent = baggage.get_baggage("vacp.intent", current_context)
-
-        # Simulating Baggage retrieval via a thread-local or assumed context propagation
-        # For this simplified implementation, we will check the current span's parent?
-        # Or more robustly, we expect the Agent to have set a thread-local intent
-        # because OTel Baggage API is complex to mock in this specific single-file setup
-        # without full Context propagation code.
-        # However, to be true to the OTel design, we should try to use Baggage.
-
-        # For now, we will skip the complex Baggage extraction and rely on the GOA switch
-        # and simple identity checks, as the "Synchronous Processor" has already validated the intent.
+        # 2. Extract Context (Baggage) - Simplified for this implementation
 
         # 3. Identity & UCF Checks
-        # Hardcoding ID for this refactor as we don't have the full request context passed in
         agent_id = "financial_coordinator"
         identity = self.ans.resolve_agent(agent_id)
 
         if not identity:
-             # Fallback for tests or unknown agents
              logger.warning(f"VACP: Agent '{agent_id}' not found. Proceeding with caution.")
              return
 
         context = {"tool": tool_name, "allowed_tools": identity.authorized_tools}
         if not self.ucf.evaluate("CONTROL-033", context):
             raise PermissionError(f"VACP: Tool '{tool_name}' unauthorized for risk tier '{identity.risk_tier}'.")
+
+    def inject_zsp_credentials(self, tool_name: str, args: dict) -> dict:
+        """
+        Performs Just-In-Time (JIT) access elevation if the tool requires it.
+        Returns the modified arguments (with injected secrets).
+        """
+        if tool_name == "place_order":
+            logger.info("🛑 Gateway: Intercepting 'place_order'. Initiating ZSP flow.")
+            try:
+                # 1. Elevate Privilege (JIT)
+                jit_creds = self.mim_service.get_jit_session()
+
+                # 2. Retrieve the actual API Key
+                api_key = self.mim_service.fetch_secret_with_jit(TRADING_SECRET_ID, jit_creds)
+
+                # 3. Inject secret into args
+                new_args = args.copy()
+                new_args['api_token'] = api_key
+                return new_args
+            except Exception as e:
+                logger.error(f"ZSP Elevation Failed: {e}")
+                raise PermissionError(f"ZSP Access Denied: {e}")
+
+        return args
 
 # Singleton Gateway
 gateway = ToolGateway()
@@ -72,10 +90,16 @@ def vacp_enforce(func):
         logger.info(f"VACP Gateway: Intercepting call to '{tool_name}'")
 
         try:
+            # 1. Verify Policy
             gateway.verify_access(tool_name, kwargs)
+
+            # 2. Inject ZSP Credentials (if needed)
+            # Note: We update kwargs. args are usually empty for tool calls in this framework.
+            updated_kwargs = gateway.inject_zsp_credentials(tool_name, kwargs)
+
         except PermissionError as e:
             logger.error(f"VACP Violation: {e}")
-            return str(e) # Return error as string to the agent so it knows it failed
+            return str(e) # Return error string to agent
 
-        return func(*args, **kwargs)
+        return func(*args, **updated_kwargs)
     return wrapper

@@ -9,7 +9,7 @@ The system is modeled as a hierarchical control loop where higher-level controll
     *   **Control Actions:** Define Goals, Set Constraints (Risk Tolerance), Emergency Stop.
     *   **Feedback:** Dashboards, Alerts, Audit Logs (ZK-Proofs).
 *   **Controller 2: Verifiable Agentic Control Plane (VACP)**
-    *   **Control Actions:** TRACK, MONITOR, QUARANTINE (Kill-Switch).
+    *   **Control Actions:** TRACK, MONITOR, QUARANTINE (Kill-Switch), **Identity Trade (ZSP Elevation)**.
     *   **Feedback:** Risk Assessment (AgentGuard), Red Team Analysis (Janus), Constraint Violations.
 *   **Controller 3: VACPGovernedAgent (Host Agent)**
     *   **Control Actions:** `google_search`, `present_financial_plan`, `place_order`, `execute_python_code`.
@@ -30,6 +30,7 @@ We analyze specific Control Actions for potential hazards.
 | :--- | :--- | :--- |
 | **Type 1: Not Provided** | Agent fails to place a stop-loss order during a market crash. | Financial Loss (L-3) |
 | **Type 2: Provided Incorrectly** | Agent places a BUY order for the wrong symbol or excessive quantity (Fat Finger). | Financial Loss (L-3) |
+| **Type 2: Provided Incorrectly** | Agent executes trade without valid JIT credentials (Bypass Attempt). | Unauthorized Access (H-2) |
 | **Type 3: Wrong Timing** | Agent places order based on stale data (Feedback Delay). | Financial Loss (L-3) |
 | **Type 4: Applied Too Long** | N/A (Atomic action) | |
 
@@ -65,3 +66,10 @@ Based on the UCAs, we derive the following mandatory engineering constraints enf
 ### Constraint 4: Data Provenance & PII (Compliance)
 *   **Constraint:** The Agent must only use approved data sources and must not leak PII.
 *   **Implementation:** ANS Data Provenance verification and Telemetry processor scrubbing sensitive fields.
+
+### Constraint 5: Zero Standing Privileges (ZSP) (Addressing UCA-Type 2 for `place_order`)
+*   **Constraint:** The Agent must hold **zero** standing permissions to execute trades or access secrets.
+*   **Implementation:**
+    *   **Gateway:** Authenticates request.
+    *   **MIM Service:** Impersonates privileged Service Account (JIT).
+    *   **Secret Manager:** Releases API key only to the JIT identity for a single transaction.

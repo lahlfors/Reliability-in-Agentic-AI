@@ -52,8 +52,8 @@ We analyze specific Control Actions for potential hazards.
 Based on the UCAs, we derive the following mandatory engineering constraints enforced by the VACP.
 
 ### Constraint 1: Financial Circuit Breaker (Addressing UCA-Type 2 for `place_order`)
-*   **Constraint:** The Agent must be technically incapable of exceeding a daily drawdown limit of 2% of the portfolio value.
-*   **Implementation:** VACP Tool Gateway "Reference Monitor" checking `place_order` parameters against current portfolio state.
+*   **Constraint:** The Agent must be technically incapable of exceeding a daily drawdown limit of **2% of the portfolio value** OR a single-trade risk exposure of **$10,000**.
+*   **Implementation:** **AgentGuard** (CMDP Module) checking `place_order` parameters against the injected `FinancialContext`. Violations trigger a blocking probability ($P_{fail} \approx 1.0$).
 
 ### Constraint 2: Resource Limiter (Addressing UCA-Type 4 for `execute_python_code`)
 *   **Constraint:** The Agent must be technically incapable of executing a script that runs for longer than 30 seconds or consumes excessive CPU cycles.

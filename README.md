@@ -22,8 +22,8 @@ We have migrated from static keys to a **GCP-Native Zero Standing Privileges** m
 The VACP replaces the traditional "human-in-the-loop" with a "governance-in-the-loop" architecture. It consists of:
 *   **Agent Name Service (ANS):** The "Source of Truth" that maintains a registry of authorized agents and their risk tiers.
 *   **Tool Gateway:** An operational chokepoint that intercepts all side-effects (API calls), enforces access control, and handles JIT credential injection.
-*   **AgentGuard:** A dynamic probabilistic assurance module that learns an MDP (Markov Decision Process) of the agent's behavior in real-time to calculate failure probabilities ($P_{max}(Failure)$).
-*   **Janus Shadow-Monitor:** A continuous internal "Red Team" that evaluates proposed actions for vulnerabilities and policy compliance (ISO 42001 Clause 9.2).
+*   **AgentGuard (Cybernetic Governor):** Implements **Constrained Markov Decision Processes (CMDPs)** to enforce hard safety boundaries. It calculates $P_{max}(Failure)$ based on real-time financial context, strictly enforcing a **$10,000 Risk Exposure Limit** and **2% Daily Drawdown** cap.
+*   **Janus Shadow-Monitor:** A continuous internal "Red Team" that evaluates proposed actions for **Unsafe Control Actions (UCAs)**. It specifically detects hazards like **"Stale Data"** (trading without analysis) and **"Code Injection"** (ISO 42001 Clause 9.2).
 *   **Governing-Orchestrator Agent (GOA):** The decision-making kernel that uses **SSVC (Stakeholder-Specific Vulnerability Categorization)** to decide whether to TRACK, MONITOR, or QUARANTINE an agent.
 
 ### **3. STPA-Driven Guardrails**

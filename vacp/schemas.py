@@ -10,9 +10,17 @@ class AgentIdentity(BaseModel):
     authorized_tools: List[str]
     training_hash: str  # For Data Provenance (Annex A.7)
 
+class FinancialContext(BaseModel):
+    """Simulated context for CMDP constraints."""
+    portfolio_value: float = 100000.0
+    current_risk_exposure: float = 0.0
+    daily_drawdown: float = 0.0
+
 class AgentAction(BaseModel):
     tool_name: str
     parameters: Dict[str, Any]
+    # Context injected by the Processor from Span attributes or Environment
+    financial_context: Optional[FinancialContext] = None
 
 class SafetyAssessment(BaseModel):
     """Output from AgentGuard and Janus."""

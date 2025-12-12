@@ -41,8 +41,25 @@ class TestVACP(unittest.TestCase):
         active, _ = self.goa.is_quarantined()
         self.assertFalse(active)
 
-    def test_processor_unsafe_reasoning(self):
-        # Simulate unsafe reasoning span
+    def test_processor_cmdp_violation(self):
+        # Simulate a "Huge Trade" that violates CMDP constraint ($10k risk)
+        mock_span = MagicMock(spec=ReadableSpan)
+        mock_span.name = "gen_ai.reasoning"
+        mock_span.attributes = {
+            "gen_ai.span.type": "reasoning",
+            "gen_ai.content.completion": "I am placing a huge order for AAPL immediately."
+        }
+
+        # The processor should infer "place_order" and "estimated_value=50000" (from 'huge')
+        self.processor.on_end(mock_span)
+
+        # Verify GOA IS quarantined due to high P(fail)
+        active, reason = self.goa.is_quarantined()
+        self.assertTrue(active)
+        self.assertIn("P(fail)=0.95", reason) # Should match the CMDP block probability
+
+    def test_processor_unsafe_uca_janus(self):
+        # Simulate unsafe UCA (Stale Data / No Analysis)
         mock_span = MagicMock(spec=ReadableSpan)
         mock_span.name = "gen_ai.reasoning"
         mock_span.attributes = {
@@ -55,7 +72,10 @@ class TestVACP(unittest.TestCase):
         # Verify GOA IS quarantined
         active, reason = self.goa.is_quarantined()
         self.assertTrue(active)
-        self.assertIn("P(fail)", reason)
+        # Reason should contain Janus vulnerability OR AgentGuard
+        # In this specific case, "buy" triggers "place_order".
+        # Janus checks for "analysis" keyword. It's missing -> Vulnerability found.
+        self.assertIn("Janus", reason)
 
     def test_gateway_enforcement(self):
         # 1. Safe State

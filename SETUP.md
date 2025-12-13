@@ -110,7 +110,7 @@ The agent card is located at `financial-advisor/agent.json`.
 Before the system can run securely, the Agent Card must be cryptographically signed. We provide a utility script to mock this C2PA signing process:
 
 ```bash
-PYTHONPATH=. poetry -C financial-advisor run python3 verify_agent_card.py
+PYTHONPATH=. poetry -C financial-advisor run python3 verify_safety.py
 ```
 This script acts as a verification tool to ensure:
 1. The card is correctly signed (`agent.json.sig` is generated).

@@ -68,10 +68,19 @@ GOOGLE_GENAI_USE_VERTEXAI="True"
 
 ## **Running the System**
 
-To launch the full system (Financial Advisor Agent + VACP), use the `deploy_all.py` script.
+### **Cloud Deployment**
+To deploy the full system (Agent + VACP) to Google Cloud Run:
 
 ```bash
-PYTHONPATH=. poetry -C financial-advisor run python3 deploy_all.py
+export GOOGLE_CLOUD_PROJECT="your-project-id"
+python3 deploy_all.py
+```
+
+### **Local Testing**
+To run the agent locally for development:
+
+```bash
+PYTHONPATH=. poetry -C financial-advisor run python3 financial-advisor/main.py
 ```
 
 Access the agent at: `http://localhost:8001`

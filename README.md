@@ -34,6 +34,7 @@ Following a formal hazard analysis (see `STPA_ANALYSIS.md`), the VACP enforces h
 
 ### **4. Auditability & Observability**
 *   **Unified Control Framework (UCF):** Maps ISO 42001 clauses to technical controls in the code.
+*   **Agent Card (EU AI Act):** A machine-readable `agent.json` artifact that acts as the "Passport" for the agent, defining strictly allowed/denied tools and risk boundaries.
 *   **ZK-Prover (Mock):** Generates Zero-Knowledge proofs of compliance for a simulated public ledger (ETHOS), satisfying ISO audit requirements.
 *   **OpenTelemetry:** Provides deep visibility into the agent's "Cognitive Loop" with PII redaction.
 

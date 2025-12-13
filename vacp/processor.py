@@ -6,7 +6,7 @@ from vacp.agent_guard import AgentGuard
 from vacp.janus import JanusMonitor
 from vacp.ucf import UCFPolicyEngine
 from vacp.goa import GoverningOrchestratorAgent
-from vacp.schemas import AgentAction
+from vacp.schemas import AgentAction, AgentCard
 
 logger = logging.getLogger(__name__)
 
@@ -32,21 +32,35 @@ class VACPSpanProcessor(SpanProcessor):
         if span_type == "reasoning":
             self._process_reasoning_span(span, attributes)
 
+        # 5. Check Operational Constraints (System 5)
+        # We access the card via GOA since processor is initialized early
+        if self.goa.agent_card:
+            self._check_operational_constraints(span, attributes)
+
+    def _check_operational_constraints(self, span: ReadableSpan, attributes: dict):
+        constraints = self.goa.agent_card.constraints
+
+        # Example: Check confidence threshold
+        # Assuming the agent logs 'model_confidence' in attributes
+        confidence = attributes.get("model_confidence")
+        if confidence is not None:
+             try:
+                 conf_val = float(confidence)
+                 threshold = constraints.risk_limits.get("confidence_threshold", 0.0)
+                 if conf_val < threshold:
+                     msg = f"Policy Violation: Confidence {conf_val} < Threshold {threshold}"
+                     logger.warning(msg)
+                     span.set_attribute("vacp.policy_violation", "confidence_too_low")
+                     # Optionally trigger intervention or kill switch
+                     # self.goa.activate_kill_switch(msg)
+             except ValueError:
+                 pass
+
     def _process_reasoning_span(self, span: ReadableSpan, attributes: dict):
         logger.info(f"VACP Processor: Analyzing Reasoning Span {span.name}")
 
         # Extract Plan/Context
         plan_text = attributes.get("gen_ai.content.completion", "")
-        # For demo, we might need to parse the proposed tool from the text if possible
-        # Or we rely on the fact that this reasoning leads to a tool call.
-        # We verify the *reasoning* itself.
-
-        # 2. AgentGuard (Clause 6.1.2)
-        # We construct a pseudo-action for the check if we can infer it,
-        # or we just check the state transition.
-        # For the refactor, let's assume we can infer the intended tool from the plan text attributes
-        # if the agent logic put it there.
-        # If not, we just check the plan text for keywords.
 
         inferred_tool = "place_order" if "buy" in plan_text.lower() or "order" in plan_text.lower() else "unknown"
         if "python" in plan_text.lower() or "code" in plan_text.lower():

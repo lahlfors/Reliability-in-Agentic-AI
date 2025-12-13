@@ -98,3 +98,23 @@ To verify that everything is set up correctly, you can run the test suites.
    ```bash
    PYTHONPATH=. poetry -C financial-advisor run python3 -m unittest discover financial-advisor/tests/
    ```
+
+## Agent Card Configuration (ISO 42001)
+
+The system is governed by an **Agent Card** (`agent.json`). This file defines the agent's identity, regulatory compliance, and permitted capabilities.
+
+### 1. File Location
+The agent card is located at `financial-advisor/agent.json`.
+
+### 2. Signing the Card
+Before the system can run securely, the Agent Card must be cryptographically signed. We provide a utility script to mock this C2PA signing process:
+
+```bash
+PYTHONPATH=. poetry -C financial-advisor run python3 verify_agent_card.py
+```
+This script acts as a verification tool to ensure:
+1. The card is correctly signed (`agent.json.sig` is generated).
+2. The `CardLoader` can parse the schema.
+3. The `Gateway` enforces the Allow/Deny lists.
+
+**Note:** If the signature is missing or invalid at runtime, the Governing Orchestrator will activate the **Kill Switch** immediately.

@@ -12,18 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Asynchronous test cases for the refactored Financial Advisor."""
+"""Asynchronous test cases for the refactored Financial Advisor (VACP/OTel)."""
 
 import sys
 import os
 import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import MagicMock, patch, AsyncMock, ANY
 
 # HACK: Add the project root to the python path to allow imports to work.
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from financial_advisor.agent import MCSVettedFinancialAgent
-from financial_advisor.utils.mcs_client import MCSClient
+from financial_advisor.agent import VACPGovernedAgent
 from google.adk.agents import InvocationContext, RunConfig, LlmAgent
 from google.adk.events.event import Event
 from google.genai import types
@@ -32,38 +31,36 @@ from google.genai import types
 pytest_plugins = ("pytest_asyncio",)
 
 @pytest.mark.asyncio
+@patch('financial_advisor.agent.tracer')
 @patch.object(LlmAgent, '_run_async_impl')
-async def test_mcs_vetted_agent_happy_path_async(mock_run_async_impl):
+async def test_vacp_governed_agent_otel_tracing(mock_run_async_impl, mock_tracer):
     """
-    Tests the MCSVettedFinancialAgent's happy path using mocks.
+    Tests that VACPGovernedAgent correctly generates OpenTelemetry spans for reasoning.
     """
     # --- Arrange ---
-    mock_mcs_client = AsyncMock(spec=MCSClient)
-    mock_mcs_client.is_server_ready_async.return_value = True
-    mock_mcs_client.configure_constraints_async.return_value = True
-    mock_mcs_client.deliberate_async.return_value = {
-        "decision": "EXECUTE",
-        "justification": "The proposed plan is within acceptable risk parameters."
-    }
-
-    vetted_agent = MCSVettedFinancialAgent(name="test_agent", mcs_client=mock_mcs_client, model="gemini-1.5-pro")
+    vetted_agent = VACPGovernedAgent(name="test_agent", model="gemini-1.5-pro")
 
     mock_ctx = MagicMock(spec=InvocationContext)
     mock_ctx.user_content = "Give me a stock plan."
-    mock_ctx.agent_states = {}
     mock_ctx.invocation_id = "test_id"
     mock_ctx.agent = vetted_agent
     mock_ctx.run_config = RunConfig()
     mock_ctx.session = MagicMock()
     mock_ctx.session.events = []
     mock_ctx.branch = "test_branch"
-    mock_ctx.context_cache_config = None
-    mock_ctx.end_invocation = False
 
+    # Mock tracer context managers
+    mock_root_span = MagicMock()
+    mock_tracer.start_as_current_span.return_value.__enter__.return_value = mock_root_span
+
+    mock_reasoning_span = MagicMock()
+    mock_tracer.start_span.return_value = mock_reasoning_span
+
+    # Mock generator yielding an event
     async def mock_run_async_impl_gen(*args, **kwargs):
         yield Event(
             author="test",
-            content=types.Content(parts=[types.Part(text="1. Buy 100 shares of GOOG.\n2. Set a stop-loss order at -5%.")]),
+            content=types.Content(parts=[types.Part(text="Thinking about stocks...")]),
             id="test",
             invocation_id=mock_ctx.invocation_id,
             partial=False
@@ -71,60 +68,19 @@ async def test_mcs_vetted_agent_happy_path_async(mock_run_async_impl):
     mock_run_async_impl.side_effect = mock_run_async_impl_gen
 
     # --- Act ---
-    final_output = ""
     async for event in vetted_agent._run_async_impl(ctx=mock_ctx):
-        if not event.partial:
-            final_output = event.content.parts[0].text
+        pass
 
     # --- Assert ---
-    mock_mcs_client.deliberate_async.assert_awaited_once()
-    assert "PLAN APPROVED BY SAFETY SUBSYSTEM" in final_output
+    # 1. Verify Root Span
+    mock_tracer.start_as_current_span.assert_called_with("agent.interaction.test_id")
+    mock_root_span.set_attribute.assert_any_call("vacp.agent.id", "test_agent")
 
+    # 2. Verify Reasoning Span creation
+    mock_tracer.start_span.assert_called_with("gen_ai.reasoning")
+    mock_reasoning_span.set_attribute.assert_any_call("gen_ai.span.type", "reasoning")
 
-@pytest.mark.asyncio
-@patch.object(LlmAgent, '_run_async_impl')
-async def test_mcs_vetted_agent_rejection_path_async(mock_run_async_impl):
-    """
-    Tests the MCSVettedFinancialAgent's rejection path asynchronously.
-    """
-    # --- Arrange ---
-    mock_mcs_client = AsyncMock(spec=MCSClient)
-    mock_mcs_client.is_server_ready_async.return_value = True
-    mock_mcs_client.deliberate_async.return_value = {
-        "decision": "VETO",
-        "justification": "The plan involves highly volatile assets, exceeding risk budget."
-    }
-
-    vetted_agent = MCSVettedFinancialAgent(name="test_agent", mcs_client=mock_mcs_client, model="gemini-1.5-pro")
-
-    mock_ctx = MagicMock(spec=InvocationContext)
-    mock_ctx.user_content = "Give me a risky plan."
-    mock_ctx.agent_states = {}
-    mock_ctx.invocation_id = "test_id"
-    mock_ctx.agent = vetted_agent
-    mock_ctx.run_config = RunConfig()
-    mock_ctx.session = MagicMock()
-    mock_ctx.session.events = []
-    mock_ctx.branch = "test_branch"
-    mock_ctx.context_cache_config = None
-    mock_ctx.end_invocation = False
-
-    async def mock_run_async_impl_gen(*args, **kwargs):
-        yield Event(
-            author="test",
-            content=types.Content(parts=[types.Part(text="A very risky plan.")]),
-            id="test",
-            invocation_id=mock_ctx.invocation_id,
-            partial=False
-        )
-    mock_run_async_impl.side_effect = mock_run_async_impl_gen
-
-    # --- Act ---
-    final_output = ""
-    async for event in vetted_agent._run_async_impl(ctx=mock_ctx):
-        if not event.partial:
-            final_output = event.content.parts[0].text
-
-    # --- Assert ---
-    assert "PLAN REJECTED BY SAFETY SUBSYSTEM" in final_output
-    assert "exceeding risk budget" in final_output
+    # 3. Verify Reasoning Span cleanup (end)
+    # It should be ended when loop finishes or tool is called. Here loop finishes.
+    mock_reasoning_span.end.assert_called()
+    mock_reasoning_span.set_attribute.assert_any_call("gen_ai.content.completion", "Thinking about stocks...")

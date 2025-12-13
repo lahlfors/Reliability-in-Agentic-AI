@@ -101,6 +101,17 @@ PYTHONPATH=. poetry -C financial-advisor run python3 verify_safety.py
 **Expected Output:**
 You should see `GUARDRAIL VIOLATION` logs or VACP blocking decisions (QUARANTINE) confirming that unsafe attempts were prevented.
 
+## **References & Further Reading**
+
+This project's architecture is informed by the following research in AI safety and governance:
+
+1.  **AgentGuard: Runtime Verification of AI Agents**
+    *   *Koohestani, R.* (2025). [arXiv:2509.23864](https://arxiv.org/abs/2509.23864)
+2.  **The Unified Control Framework: Establishing a Common Foundation for Enterprise AI Governance**
+    *   *Eisenberg, I. W., Gamboa, L., & Sherman, E.* (2025). [arXiv:2503.05937](https://arxiv.org/abs/2503.05937)
+3.  **Systematic Hazard Analysis for Frontier AI using STPA**
+    *   *Mylius, S.* (2025). [arXiv:2506.01782](https://arxiv.org/abs/2506.01782)
+
 ## **License**
 
 This project is licensed under the Apache 2.0 License. See the LICENSE file for more details.

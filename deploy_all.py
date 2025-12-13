@@ -1,70 +1,88 @@
-import os
+"""
+Deployment script for the Financial Advisor Agent with VACP Integration.
+
+This script launches the Financial Advisor Agent using the `adk web` command.
+It is configured to be "Container-Ready" for deployment to Google Cloud Run:
+- Binds to 0.0.0.0 (required for container ingress)
+- Reads the PORT environment variable (required by Cloud Run contract)
+
+The Verifiable Agentic Control Plane (VACP) runs as an embedded sidecar library
+within the agent process.
+"""
+
 import subprocess
+import time
+import os
 import sys
-import logging
 
-# Configure Logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# --- Configuration ---
 
-def get_env_var(name, default=None, required=True):
-    value = os.getenv(name, default)
-    if required and not value:
-        logging.error(f"Environment variable '{name}' is missing.")
-        sys.exit(1)
-    return value
+# Set the project root as the Python path to allow for correct module imports
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+env = os.environ.copy()
+env["PYTHONPATH"] = env.get("PYTHONPATH", "") + os.pathsep + PROJECT_ROOT
 
-def run_command(command, error_msg="Command failed"):
-    """Runs a shell command and streams output."""
-    logging.info(f"Running: {' '.join(command)}")
+# Cloud Run injects the PORT environment variable. Default to 8001 for local dev.
+PORT = os.environ.get("PORT", "8001")
+
+# The `adk web` command serves the agent defined in the current directory.
+# We need to run it from within the `financial-advisor` directory.
+FINANCIAL_ADVISOR_COMMAND = [
+    "adk", "web",
+    "--host", "0.0.0.0",
+    "--port", PORT
+]
+
+# --- Main Execution ---
+
+def run():
+    """
+    Launches and manages the deployment of the services.
+    """
+    processes = []
+    print(f"--- Starting VACP-Governed Financial Agent on Port {PORT} ---")
+
     try:
-        process = subprocess.run(command, check=True, text=True)
-    except subprocess.CalledProcessError as e:
-        logging.error(f"{error_msg}: {e}")
-        sys.exit(1)
+        # Launch Financial Advisor Agent (VACP is embedded)
+        print(f"🚀 Launching Financial Advisor Agent (0.0.0.0:{PORT})...")
+        print("   -> Verifiable Agentic Control Plane (VACP): ACTIVE (Embedded)")
+        print("   -> Agent Name Service (ANS): ACTIVE (In-Memory)")
+        print("   -> Tool Gateway: ACTIVE")
 
-def main():
-    # 1. Configuration
-    PROJECT_ID = get_env_var("GOOGLE_CLOUD_PROJECT") # e.g., 'my-capstone-project'
-    REGION = get_env_var("GOOGLE_CLOUD_REGION", "us-central1", required=False)
-    SERVICE_NAME = get_env_var("SERVICE_NAME", "financial-advisor-agent", required=False)
+        # We need to change the current working directory for the `adk web` command to work correctly.
+        advisor_process = subprocess.Popen(
+            FINANCIAL_ADVISOR_COMMAND,
+            env=env,
+            cwd=os.path.join(PROJECT_ROOT, "financial-advisor"), # Run command from this directory
+            stdout=sys.stdout,
+            stderr=sys.stderr
+        )
+        processes.append(advisor_process)
+        print(f"✅ Financial Advisor Agent process started with PID: {advisor_process.pid}")
 
-    # Image name follows GCR/Artifact Registry convention
-    IMAGE_URI = f"gcr.io/{PROJECT_ID}/{SERVICE_NAME}:latest"
 
-    print(f"""
-    ========================================
-    🚀 VACP AGENT DEPLOYMENT (Cloud Run)
-    ========================================
-    Project: {PROJECT_ID}
-    Region:  {REGION}
-    Service: {SERVICE_NAME}
-    Target:  {IMAGE_URI}
-    ========================================
-    """)
+        print(f"\n--- Agent is running at http://0.0.0.0:{PORT}. Press Ctrl+C to stop. ---")
 
-    # 2. Build Container
-    logging.info("Building container image...")
-    run_command(
-        ["gcloud", "builds", "submit", "--tag", IMAGE_URI, "."],
-        error_msg="Failed to build container"
-    )
+        # Wait for all processes to complete.
+        for p in processes:
+            p.wait()
 
-    # 3. Deploy to Cloud Run
-    logging.info("Deploying to Cloud Run...")
-    deploy_cmd = [
-        "gcloud", "run", "deploy", SERVICE_NAME,
-        "--image", IMAGE_URI,
-        "--region", REGION,
-        "--platform", "managed",
-        "--allow-unauthenticated", # Adjust based on security needs
-        "--set-env-vars", f"GOOGLE_CLOUD_PROJECT={PROJECT_ID}",
-        # Bind the ZSP Service Account if you have the email
-        # "--service-account", f"vacp-agent-sa@{PROJECT_ID}.iam.gserviceaccount.com"
-    ]
+    except KeyboardInterrupt:
+        print("\n--- Received keyboard interrupt. Shutting down services... ---")
+    finally:
+        for p in processes:
+            print(f"Terminating process {p.pid}...")
+            p.terminate()
 
-    run_command(deploy_cmd, error_msg="Failed to deploy to Cloud Run")
+        # Wait a moment for processes to terminate
+        time.sleep(2)
 
-    logging.info(f"✅ Deployment Complete! Service URL available via 'gcloud run services describe {SERVICE_NAME}'")
+        for p in processes:
+            if p.poll() is None: # If the process is still running
+                print(f"Process {p.pid} did not terminate, killing it.")
+                p.kill()
+
+        print("--- All services have been shut down. ---")
 
 if __name__ == "__main__":
-    main()
+    run()

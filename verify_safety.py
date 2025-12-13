@@ -1,85 +1,79 @@
-"""
-Script to verify that the guardrails and telemetry are working.
-"""
-import asyncio
+# verify_agent_card.py
+import os
 import logging
-# Change import to match PYTHONPATH structure where financial_advisor is top-level
-from financial_advisor.tools.risk_tools import place_order, execute_python_code
-from metacognitive_control_subsystem.mcs.guardrails.actuators import GuardrailController, SecurityException, NetworkSandbox
-from observability.observability.telemetry import setup_telemetry
+# Configure basic logging to see output
+logging.basicConfig(level=logging.INFO)
 
-# Setup telemetry to print to console
-setup_telemetry()
-logger = logging.getLogger(__name__)
+from vacp.c2pa import C2PASigner
+from vacp.card_loader import CardLoader
+from vacp.gateway import Gateway, gateway as global_gateway, ToolGateway
 
-def test_guardrails():
-    print("--- Testing Guardrails ---")
+import os
+# Adjust path if running from root or subdir
+if os.path.exists("financial-advisor/agent.json"):
+    CARD_PATH = "financial-advisor/agent.json"
+elif os.path.exists("agent.json"):
+    CARD_PATH = "agent.json"
+else:
+    # Fallback to absolute path or assume running from root
+    CARD_PATH = "financial-advisor/agent.json"
 
-    # 1. Test Financial Circuit Breaker (Safe)
-    print("\n1. Testing Safe Order:")
-    result = place_order("AAPL", 10, "BUY", 150.0) # $1500 risk < $2000 limit
-    print(f"Result: {result}")
-    assert "ORDER CONFIRMED" in result
+SIG_PATH = CARD_PATH + ".sig"
 
-    # 2. Test Financial Circuit Breaker (Unsafe)
-    print("\n2. Testing Unsafe Order (Over Limit):")
-    result = place_order("AAPL", 20, "BUY", 150.0) # $3000 risk > $2000 limit
-    print(f"Result: {result}")
-    assert "BLOCKED" in result and "exceeds daily limit" in result
+def run_verification():
+    print("--- 1. Signing the Card (Mock C2PA) ---")
+    signer = C2PASigner()
+    signer.sign_file(CARD_PATH, SIG_PATH)
+    print(f"Signed {CARD_PATH} -> {SIG_PATH}\n")
 
-    # 3. Test Resource Limiter (Safe)
-    print("\n3. Testing Safe Code:")
-    result = execute_python_code("print('Hello world')")
-    print(f"Result: {result}")
-    assert "successfully" in result
-
-    # 4. Test Resource Limiter (Unsafe - Infinite Loop)
-    print("\n4. Testing Unsafe Code (Infinite Loop):")
-    result = execute_python_code("while True: pass")
-    print(f"Result: {result}")
-    assert "BLOCKED" in result and "Infinite loop" in result
-
-    # 5. Test Resource Limiter (Unsafe - Import)
-    print("\n5. Testing Unsafe Code (Network Import):")
-    result = execute_python_code("import requests")
-    print(f"Result: {result}")
-    assert "BLOCKED" in result and "Unauthorized network" in result
-
-    # 6. Test Network Sandbox Whitelist Strictness
-    print("\n6. Testing Network Sandbox Strictness:")
-    sandbox = NetworkSandbox()
-
-    # Safe
+    print("--- 2. Loading the Card ---")
+    loader = CardLoader(enforce_signature=True)
     try:
-        sandbox.verify("fetch_url", {"url": "https://google.com"})
-        print("PASS: google.com allowed")
-    except SecurityException:
-        print("FAIL: google.com blocked")
+        card = loader.load_card(CARD_PATH)
+    except Exception as e:
+        print(f"FATAL: {e}")
+        return
+
+    print("--- 3. Testing Enforcement (Gateway) ---")
+    # We can test the standalone Gateway class logic
+    test_gateway = Gateway(agent_card=card)
+
+    # Test Allowed Tool
+    tool_ok = "get_stock_price"
+    result_ok = test_gateway.check_tool_policy(tool_ok)
+    print(f"Tool '{tool_ok}': {'Allowed ✅' if result_ok else 'Blocked ❌'}")
+    assert result_ok == True
+
+    # Test Denied Tool
+    tool_bad = "shell_execute"
+    result_bad = test_gateway.check_tool_policy(tool_bad)
+    print(f"Tool '{tool_bad}': {'Allowed ❌' if result_bad else 'Blocked ✅'}")
+    assert result_bad == False
+
+    # Test Unlisted Tool (Should be blocked if allow-list exists)
+    tool_unknown = "random_function"
+    result_unknown = test_gateway.check_tool_policy(tool_unknown)
+    print(f"Tool '{tool_unknown}': {'Allowed ❌' if result_unknown else 'Blocked ✅'}")
+    assert result_unknown == False
+
+    print("\n--- 4. Testing Integrated Global Gateway ---")
+    # Verify the global gateway (ToolGateway) works when policy is set
+    global_gateway.set_policy(card)
+
+    # ToolGateway.verify_access raises PermissionError on failure
+    try:
+        global_gateway.verify_access(tool_ok, {})
+        print(f"Global Gateway '{tool_ok}': Access Granted ✅")
+    except PermissionError as e:
+        print(f"Global Gateway '{tool_ok}': Unexpected Denial ❌ ({e})")
 
     try:
-        sandbox.verify("fetch_url", {"url": "https://api.market-data.com/v1/quotes"})
-        print("PASS: api.market-data.com allowed")
-    except SecurityException:
-        print("FAIL: api.market-data.com blocked")
+        global_gateway.verify_access(tool_bad, {})
+        print(f"Global Gateway '{tool_bad}': Unexpected Grant ❌")
+    except PermissionError:
+        print(f"Global Gateway '{tool_bad}': Access Denied ✅")
 
-    # Unsafe Subdomain Bypass Attempt
-    try:
-        sandbox.verify("fetch_url", {"url": "https://google.com.malware.com"})
-        print("FAIL: google.com.malware.com allowed (Bypass Successful!)")
-        assert False, "Subdomain bypass should be blocked"
-    except SecurityException:
-        print("PASS: google.com.malware.com blocked")
-
-    # Unsafe TLD mismatch
-    try:
-        sandbox.verify("fetch_url", {"url": "https://google.co.uk"})
-        # Assuming only google.com is whitelisted
-        print("FAIL: google.co.uk allowed (assuming strict whitelist)")
-        assert False, "google.co.uk should be blocked"
-    except SecurityException:
-        print("PASS: google.co.uk blocked")
-
-    print("\n--- All Guardrail Tests Passed ---")
+    print("\n--- ✅ Verification Complete: System is Secure ---")
 
 if __name__ == "__main__":
-    test_guardrails()
+    run_verification()

@@ -80,19 +80,3 @@ Based on the UCAs, we derive the following mandatory engineering constraints enf
     *   **Mitigated by vacp.governor enforcing constraints defined in agent.json (System 5 Policy).**
     *   **Agent Card:** Cryptographically verified JSON artifact defining the `tools_allowed` and `tools_denied` lists.
     *   **Tool Gateway:** Enforces the Allow/Deny lists at the point of tool invocation.
-
-## 4. Implementation Verification (VACP)
-
-The hazards identified in the STPA analysis above have been mitigated through the implementation of the Verifiable Agentic Control Plane (VACP).
-
-### Mitigation Mapping
-
-| Hazard ID | Hazard Description | Mitigation Implementation (Component) |
-| :--- | :--- | :--- |
-| **H-1** | **Uncontrolled Tool Use**<br>(Agent executes dangerous shell commands or financial transfers without authorization) | **Policy Governor (System 3)**<br>Implemented in `vacp.governor.Governor`. The `agent.json` artifact defines a strict `tools_denied` list (e.g., `shell_execute`). The `ToolGateway` enforces this policy at runtime, blocking any tool call not explicitly allowed or explicitly denied. |
-| **H-2** | **Unauthorized Policy Modification**<br>(Attacker alters the `agent.json` to allow dangerous tools) | **Identity & Verification (System 5)**<br>Implemented in `vacp.c2pa.C2PASigner` and `vacp.card_loader`. The system requires a cryptographic signature (`agent.json.sig`) to match the configuration file. The `CardLoader` prevents the agent from starting if the signature verification fails. |
-| **H-3** | **Unobserved Failure**<br>(Governance violations occur silently) | **Observability Monitor (System 4)**<br>Implemented in `vacp.processor.VACPSpanProcessor`. All governance checks emit OpenTelemetry spans. Policy violations (e.g., blocked tool calls) are tagged with `vacp.policy_violation` attributes, ensuring they are visible in the audit trail. |
-
-### Verification Evidence
-* **Unit Tests:** `financial-advisor/tests/test_agents.py` verifies that the `VACPGovernedAgent` correctly emits telemetry spans.
-* **Integration Tests:** `verify_agent_card.py` confirms that the loader rejects unsigned cards and the Governor blocks tools listed in the denial list.

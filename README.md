@@ -34,6 +34,7 @@ Following a formal hazard analysis (see `STPA_ANALYSIS.md`), the VACP enforces h
 
 ### **4. Auditability & Observability**
 *   **Unified Control Framework (UCF):** Maps ISO 42001 clauses to technical controls in the code.
+*   **Agent Card (EU AI Act):** A machine-readable `agent.json` artifact that acts as the "Passport" for the agent, defining strictly allowed/denied tools and risk boundaries.
 *   **ZK-Prover (Mock):** Generates Zero-Knowledge proofs of compliance for a simulated public ledger (ETHOS), satisfying ISO audit requirements.
 *   **OpenTelemetry:** Provides deep visibility into the agent's "Cognitive Loop" with PII redaction.
 
@@ -67,10 +68,19 @@ GOOGLE_GENAI_USE_VERTEXAI="True"
 
 ## **Running the System**
 
-To launch the full system (Financial Advisor Agent + VACP), use the `deploy_all.py` script.
+### **Cloud Deployment**
+To deploy the full system (Agent + VACP) to Google Cloud Run:
 
 ```bash
-PYTHONPATH=. poetry -C financial-advisor run python3 deploy_all.py
+export GOOGLE_CLOUD_PROJECT="your-project-id"
+python3 deploy_all.py
+```
+
+### **Local Testing**
+To run the agent locally for development:
+
+```bash
+PYTHONPATH=. poetry -C financial-advisor run python3 financial-advisor/main.py
 ```
 
 Access the agent at: `http://localhost:8001`

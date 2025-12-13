@@ -72,6 +72,7 @@ For a "Verifiable, ISO-Compliant" system, GKE + Istio is the industry standard p
 **Recommendation: Google Cloud Run**
 *   **Why:** It allows you to package the `vacp` library and the agent into a single container image (or main + sidecar) easily. It natively supports the Service Account Identity needed for our ZSP implementation. It respects the standard HTTP/Web interface of `adk web`.
 *   **Action:** Create a `Dockerfile` that installs `poetry`, copies the `vacp` and `financial-advisor` directories, and runs `deploy_all.py` (or just `adk web`). Ensure the Cloud Run service is deployed with the `vacp-gateway-sa` service account.
+*   **Update:** Ensure the `agent.json` and its signature are copied into the container image during the build process to guarantee the agent starts with a valid policy.
 
 ### **Scenario B: Production / ISO Certification (Target State)**
 **Recommendation: Google Kubernetes Engine (GKE) with Istio**

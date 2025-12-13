@@ -1,0 +1,42 @@
+{
+  "card_version": "1.0",
+  "agent_name": "EquiSafe-Advisor",
+  "agent_version": "2.4.1-beta",
+  "model_hash": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "provider": {
+    "name": "Verifiable AI Solutions Ltd.",
+    "address": "123 Innovation Dr, Tech Park, London, UK",
+    "lei_code": "5493006MNBJD5L4L4P89",
+    "contact_email": "compliance@verifiable-ai.com"
+  },
+  "regulatory": {
+    "intended_purpose": "To provide automated technical analysis and sentiment evaluation of S&P 500 stocks.",
+    "high_risk_category": "essential_services_financial",
+    "human_oversight_measures": [
+      "logging_all_decisions",
+      "require_approval_for_trades_over_10k"
+    ]
+  },
+  "constraints": {
+    "max_autonomy_level": 3,
+    "tools_allowed": [
+      "get_stock_price",
+      "get_company_news",
+      "calculate_rsi",
+      "fetch_balance",
+      "place_order",
+      "execute_python_code",
+      "google_search"
+    ],
+    "tools_denied": [
+      "shell_execute",
+      "transfer_funds_external",
+      "reset_database"
+    ],
+    "risk_limits": {
+      "max_drawdown_percent": 10.0,
+      "max_daily_trades": 50,
+      "confidence_threshold": 0.7
+    }
+  }
+}

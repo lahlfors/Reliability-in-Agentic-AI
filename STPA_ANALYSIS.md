@@ -73,3 +73,10 @@ Based on the UCAs, we derive the following mandatory engineering constraints enf
     *   **Gateway:** Authenticates request.
     *   **MIM Service:** Impersonates privileged Service Account (JIT).
     *   **Secret Manager:** Releases API key only to the JIT identity for a single transaction.
+
+### Constraint 6: Uncontrolled Tool Use (Addressing UCA-Type 2 for all tools)
+*   **Constraint:** The Agent must be technically incapable of calling tools that are not explicitly authorized in its Identity Card (agent.json).
+*   **Implementation:**
+    *   **Mitigated by vacp.governor enforcing constraints defined in agent.json (System 5 Policy).**
+    *   **Agent Card:** Cryptographically verified JSON artifact defining the `tools_allowed` and `tools_denied` lists.
+    *   **Tool Gateway:** Enforces the Allow/Deny lists at the point of tool invocation.

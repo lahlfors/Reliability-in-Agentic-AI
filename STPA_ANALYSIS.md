@@ -80,3 +80,14 @@ Based on the UCAs, we derive the following mandatory engineering constraints enf
     *   **Mitigated by vacp.governor enforcing constraints defined in agent.json (System 5 Policy).**
     *   **Agent Card:** Cryptographically verified JSON artifact defining the `tools_allowed` and `tools_denied` lists.
     *   **Tool Gateway:** Enforces the Allow/Deny lists at the point of tool invocation.
+
+## 4. Verification Evidence
+
+The implementation of the constraints above is verified through the following automated tests and artifacts:
+
+| Constraint | Verification Artifact | Description |
+| :--- | :--- | :--- |
+| **Constraint 6 (Policy)** | `financial-advisor/agent.json` | **Agent Card:** Defines the `tools_denied` list (e.g., blocking `shell_execute`). |
+| **Constraint 6 (Integrity)** | `vacp/c2pa.py` | **C2PA Signer:** Verifies the cryptographic signature of the Agent Card at startup. |
+| **Constraint 6 (Enforcement)** | `verify_safety.py` | **Live Fire Test:** script successfully demonstrates that the Governor blocks `shell_execute` and allows `get_stock_price`. |
+| **Constraint 4 (Observability)** | `financial-advisor/tests/test_agents.py` | **Telemetry Test:** Confirms that blocked actions emit OpenTelemetry spans with `vacp.policy_violation` attributes. |

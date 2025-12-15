@@ -45,19 +45,20 @@ class TestCyberneticGovernance(unittest.TestCase):
         self.assertIsNone(result, "Safe trade should be allowed")
 
     def test_high_value_trade_consensus(self):
-        logger.info("\n--- Test: High Value Trade (Consensus) ---")
-        # > 50,000 triggers Consensus. Mock Consensus returns True by default.
+        logger.info("\n--- Test: High Value Trade (Policy Block) ---")
+        # Capstone Rule: > 50,000 is STRICTLY FORBIDDEN.
         payload = {"action": "execute_trade", "parameters": {"amount": 60000}}
         result = self.agent.execute_governance_check(payload)
-        self.assertIsNone(result, "Consensus should allow high value trade (default mock behavior)")
+        self.assertIsNotNone(result)
+        self.assertIn("exceeds limit of $50,000", result)
 
     def test_critical_trade_human(self):
-        logger.info("\n--- Test: Critical Trade (Human Approval) ---")
-        # > 1,000,000 triggers Human Approval.
-        # Our implementation simulates Auto-Approval for now.
+        logger.info("\n--- Test: Critical Trade (Policy Block) ---")
+        # Capstone Rule: > 50,000 is STRICTLY FORBIDDEN, so > 2M is also blocked.
         payload = {"action": "execute_trade", "parameters": {"amount": 2000000}}
         result = self.agent.execute_governance_check(payload)
-        self.assertIsNone(result, "Human approval should be simulated/allowed")
+        self.assertIsNotNone(result)
+        self.assertIn("exceeds limit of $50,000", result)
 
     def test_policy_violation(self):
         logger.info("\n--- Test: Policy Violation (Data Exfiltration) ---")

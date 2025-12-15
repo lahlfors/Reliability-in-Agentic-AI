@@ -1,7 +1,8 @@
 from enum import Enum
 from typing import List, Optional, Dict, Any, Literal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 import time
+import re
 
 # --- Existing schemas (Preserved for compatibility) ---
 
@@ -76,3 +77,50 @@ class AgentCard(BaseModel):
     provider: ProviderDetails
     regulatory: RegulatoryCompliance
     constraints: OperationalConstraints
+
+# --- Capstone "Glass Wall" Schemas ---
+
+class TradeAction(BaseModel):
+    """
+    Layer 1: Syntax Trapdoor.
+    Strict schema for trade execution to prevent injection and type errors.
+    """
+    symbol: str
+    action: Literal["BUY", "SELL"]
+    amount: float
+    reason: Optional[str] = None
+
+    @validator('amount', pre=True)
+    def validate_amount_type(cls, v):
+        """Disallow string representations of numbers that might contain suffixes or be malformed."""
+        if isinstance(v, str):
+            # Fail hard on strings like "10k" or "1,000,000" if we want strict float
+            # Pydantic default coercion might allow "1000", but we want to fail "1,000,000" or "10k"
+            # Capstone Req: "Fail hard on invalid ones"
+            if "," in v or "k" in v.lower() or "m" in v.lower():
+                raise ValueError("Amount must be a pure number, not a string with formatters.")
+        return v
+
+    @validator('reason', 'symbol')
+    def prevent_sql_injection(cls, v):
+        """
+        Layer 1 Defense: Sanitization against SQL Injection.
+        """
+        if v is None:
+            return v
+
+        # Common SQL Injection patterns
+        sql_patterns = [
+            r"DROP\s+TABLE",
+            r"DELETE\s+FROM",
+            r"INSERT\s+INTO",
+            r"SELECT\s+.*FROM",
+            r";--",
+            r"' OR '1'='1"
+        ]
+
+        for pattern in sql_patterns:
+            if re.search(pattern, v, re.IGNORECASE):
+                raise ValueError(f"Security Alert: Potential SQL Injection detected in field: {v}")
+
+        return v

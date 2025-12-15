@@ -71,6 +71,17 @@ class TestVACP(unittest.TestCase):
             original_ans = gateway.ans
             gateway.ans = instance
 
+            # Temporarily override Agent Card on Gateway to allow test_tool
+            original_card = gateway.card
+            # Create a mock card or just set constraints
+            mock_card = MagicMock()
+            mock_card.constraints.tools_allowed = ["test_tool"]
+            mock_card.constraints.tools_denied = []
+            gateway.card = mock_card
+            # Update internal sets
+            gateway.allowed_tools = {"test_tool"}
+            gateway.denied_tools = set()
+
             try:
                 @vacp_enforce
                 def test_tool():
@@ -85,6 +96,13 @@ class TestVACP(unittest.TestCase):
 
             finally:
                 gateway.ans = original_ans
+                gateway.card = original_card
+                if original_card:
+                    gateway.allowed_tools = set(original_card.constraints.tools_allowed)
+                    gateway.denied_tools = set(original_card.constraints.tools_denied)
+                else:
+                    gateway.allowed_tools = set()
+                    gateway.denied_tools = set()
 
 if __name__ == '__main__':
     unittest.main()

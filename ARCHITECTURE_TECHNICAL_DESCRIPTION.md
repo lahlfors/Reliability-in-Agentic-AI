@@ -35,4 +35,18 @@ The system implements a **Hierarchical Deterministic Markov Decision Process (HD
 
 *   **`financial_advisor/tools/router.py`**: The "Traffic Cop" logic.
 *   **`financial_advisor/agent.py`**: The Coordinator definition (stripped of stochastic tools).
-*   **`vacp/`**: The wider governance library (AgentGuard, GOA, Janus) which integrates via OpenTelemetry spans.
+*   **`vacp/`**: The wider governance library (AgentGuard, GOA, Janus, ECBF) which integrates via OpenTelemetry spans.
+
+## Cybernetic Upgrade: ECBF & System 4
+
+To address the "Crisis of Linearity" in agentic governance, we have integrated **Exponential Control Barrier Functions (ECBF)**.
+
+### System 4: Derivative Estimator
+*   **Role**: Serves as the "Intelligence" function of the Viable System Model (VSM).
+*   **Function**: Uses a `WorldModel` (e.g., `HeuristicFinancialWorldModel`) to simulate future trajectories.
+*   **Output**: Estimates the derivatives of the safety function: velocity ($\dot{h}$) and acceleration ($\ddot{h}$) of risk.
+
+### ECBF Governor
+*   **Role**: System 2 Safety Filter.
+*   **Logic**: Enforces the inequality $h(x) + K_1 \dot{h}(x) + K_2 \ddot{h}(x) \geq 0$.
+*   **Benefit**: Can detect "Semantic Inertia"—momentum towards a violation—and trigger a kill-switch *before* the limit is hit (e.g., blocking a trade that would inevitably lead to a breach due to market drift).

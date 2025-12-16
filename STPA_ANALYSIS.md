@@ -18,6 +18,7 @@ The system is modeled as a hierarchical control loop where higher-level controll
 
 ### 1.2 Feedback Mechanisms
 *   **Tool Gateway:** The VACP Tool Gateway acts as the primary feedback sensor, intercepting all environment interactions.
+*   **System 4 (Derivative Estimator):** Provides predictive feedback on the *future* state of safety constraints ($\dot{h}, \ddot{h}$), enabling anticipatory control.
 *   **AgentGuard:** Provides real-time probabilistic feedback on the likelihood of failure ($P_{max}$).
 *   **Janus:** Provides simulated feedback on potential vulnerabilities in proposed plans.
 
@@ -54,6 +55,7 @@ Based on the UCAs, we derive the following mandatory engineering constraints enf
 ### Constraint 1: Financial Circuit Breaker (Addressing UCA-Type 2 for `place_order`)
 *   **Constraint:** The Agent must be technically incapable of exceeding a daily drawdown limit of 2% of the portfolio value.
 *   **Implementation:** VACP Tool Gateway "Reference Monitor" checking `place_order` parameters against current portfolio state.
+*   **Upgrade:** ECBF Governor enforces this dynamically by preventing actions that create *momentum* towards the limit (Semantic Inertia).
 
 ### Constraint 2: Resource Limiter (Addressing UCA-Type 4 for `execute_python_code`)
 *   **Constraint:** The Agent must be technically incapable of executing a script that runs for longer than 30 seconds or consumes excessive CPU cycles.

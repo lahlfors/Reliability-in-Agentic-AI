@@ -1,0 +1,31 @@
+
+============================================================
+ DEMO: Guardrail: Zero Standing Privileges (Authorization)
+============================================================
+SCENARIO: User with role 'analyst' attempts 'EXECUTION_PLAN' (Trading).
+[-] Input State: {'user_role': 'analyst'}
+[-] Intent: EXECUTION_PLAN
+[-] Router Log: Unauthorized. Transferring to compliance.
+[-] Action Triggered: Transfer to 'compliance_agent'
+>>> SUCCESS: Request BLOCKED. Routed to Compliance.
+------------------------------
+
+SCENARIO: User with role 'admin' attempts 'EXECUTION_PLAN'.
+[-] Action Triggered: Transfer to 'execution_analyst_agent'
+>>> SUCCESS: Request ALLOWED. Routed to Execution Analyst.
+
+============================================================
+ DEMO: Guardrail: Infinite Loop Prevention
+============================================================
+SCENARIO: System detects excessive transfers in a single session.
+[-] Starting transfer loop...
+   Transfer 1: OK -> data_analyst_agent (Count: 1)
+   Transfer 2: OK -> data_analyst_agent (Count: 2)
+   Transfer 3: OK -> data_analyst_agent (Count: 3)
+   Transfer 4: OK -> data_analyst_agent (Count: 4)
+   Transfer 5: OK -> data_analyst_agent (Count: 5)
+
+[-] Attempting Transfer #6 (Threshold is 5)...
+[-] Router Log: Loop detected. Transferring to human.
+[-] Action Triggered: Transfer to 'human_escalation_agent'
+>>> SUCCESS: Loop Intercepted. Hard switch to Human Escalation.

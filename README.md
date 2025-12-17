@@ -25,9 +25,11 @@ The VACP replaces the traditional "human-in-the-loop" with a "governance-in-the-
 *   **AgentGuard:** A dynamic probabilistic assurance module that learns an MDP (Markov Decision Process) of the agent's behavior in real-time to calculate failure probabilities ($P_{max}(Failure)$).
 *   **Janus Shadow-Monitor:** A continuous internal "Red Team" that evaluates proposed actions for vulnerabilities and policy compliance (ISO 42001 Clause 9.2).
 *   **Governing-Orchestrator Agent (GOA):** The decision-making kernel that uses **SSVC (Stakeholder-Specific Vulnerability Categorization)** to decide whether to TRACK, MONITOR, or QUARANTINE an agent.
+*   **System 4 Derivative Estimator:** A new predictive module (VACP 2.0) that uses a World Model to estimate the semantic velocity and acceleration of the agent's risk trajectory, preventing "Inevitable Collision States."
 
 ### **3. STPA-Driven Guardrails**
 Following a formal hazard analysis (see `STPA_ANALYSIS.md`), the VACP enforces hard safety constraints:
+*   **Exponential Control Barrier Functions (ECBF):** A control-theoretic safety filter that blocks actions not just based on current state, but on the *derivative* of risk, effectively managing "Semantic Inertia."
 *   **Financial Circuit Breaker:** Prevents trades exceeding daily drawdown limits.
 *   **Resource Limiter:** Blocks infinite loops or excessive resource consumption.
 *   **Network Sandbox:** Enforces strict domain allow-listing to prevent data exfiltration.

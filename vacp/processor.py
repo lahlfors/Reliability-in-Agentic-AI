@@ -7,6 +7,8 @@ from vacp.janus import JanusMonitor
 from vacp.ucf import UCFPolicyEngine
 from vacp.goa import GoverningOrchestratorAgent
 from vacp.schemas import AgentAction, AgentCard
+from vacp.ecbf import ECBFGovernor
+from vacp.system4 import FinancialState
 
 logger = logging.getLogger(__name__)
 
@@ -14,12 +16,14 @@ class VACPSpanProcessor(SpanProcessor):
     """
     ISO 42001 Nervous System.
     Synchronously processes spans to trigger the Kill Switch BEFORE the agent can act.
+    Now upgraded with System 4 Derivative Estimator and ECBF Governor.
     """
     def __init__(self):
         self.agent_guard = AgentGuard()
         self.janus = JanusMonitor()
         self.ucf = UCFPolicyEngine()
         self.goa = GoverningOrchestratorAgent() # Singleton
+        self.ecbf = ECBFGovernor()
 
     def on_end(self, span: ReadableSpan) -> None:
         """
@@ -68,6 +72,29 @@ class VACPSpanProcessor(SpanProcessor):
 
         action = AgentAction(tool_name=inferred_tool, parameters={"context": plan_text})
 
+        # --- ECBF / System 4 Check ---
+        # Extract financial context from span attributes (injected by runtime or previous tools)
+        # Defaults provided for safety/testing
+        try:
+            financial_state = FinancialState(
+                portfolio_value=float(attributes.get("vacp.context.portfolio_value", 10_000_000.0)),
+                risk_exposure=float(attributes.get("vacp.context.risk_exposure", 500_000.0)), # Default mid-range
+                market_volatility=float(attributes.get("vacp.context.market_volatility", 0.2)),
+                liquidity_score=float(attributes.get("vacp.context.liquidity_score", 1.0))
+            )
+
+            # Pass GOA constraints to ECBF
+            constraints = self.goa.agent_card.constraints if self.goa.agent_card else None
+            is_safe, ecbf_reason, metrics = self.ecbf.check_safety(financial_state, action, constraints)
+
+            if not is_safe:
+                logger.critical(f"VACP Processor: ECBF KILL-SWITCH TRIGGERED. {ecbf_reason}")
+                self.goa.activate_kill_switch(ecbf_reason)
+                # We can return early or continue to log other checks
+        except Exception as e:
+            logger.error(f"Error during ECBF check: {e}")
+
+        # --- Legacy / Other Checks ---
         self.agent_guard.update_model(action)
         p_failure = self.agent_guard.calculate_failure_probability(action, risk_tier="High")
 
@@ -79,6 +106,8 @@ class VACPSpanProcessor(SpanProcessor):
         if vulnerability != "None" or p_failure > 0.05:
             decision = "QUARANTINE"
             justification = f"P(fail)={p_failure}, Janus={vulnerability}"
-            self.goa.activate_kill_switch(justification)
+            # Only activate if not already activated by ECBF (to preserve the specific reason)
+            if not self.goa.is_quarantined()[0]:
+                self.goa.activate_kill_switch(justification)
 
         logger.info(f"VACP Processor: Decision={decision} for intent '{inferred_tool}'")

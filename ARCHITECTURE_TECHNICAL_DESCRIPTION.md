@@ -37,13 +37,16 @@ The system implements a **Hierarchical Deterministic Markov Decision Process (HD
 *   **`financial_advisor/agent.py`**: The Coordinator definition (stripped of stochastic tools).
 *   **`vacp/`**: The wider governance library (AgentGuard, GOA, Janus, ECBF) which integrates via OpenTelemetry spans.
 
+### State Persistence
+To support distributed deployment and "Time Travel" debugging, the `GoverningOrchestratorAgent` (GOA) uses a `FileBasedStateManager` to persist the global kill-switch state and quarantine reasons to durable storage (simulating Redis/Etcd).
+
 ## Cybernetic Upgrade: ECBF & System 4
 
 To address the "Crisis of Linearity" in agentic governance, we have integrated **Exponential Control Barrier Functions (ECBF)**.
 
 ### System 4: Derivative Estimator
 *   **Role**: Serves as the "Intelligence" function of the Viable System Model (VSM).
-*   **Function**: Uses a `WorldModel` (e.g., `HeuristicFinancialWorldModel`) to simulate future trajectories.
+*   **Function**: Uses a `RealTimeMarketModel` (backed by live `yfinance` volatility data) to simulate future trajectories, grounding predictions in ground truth rather than heuristics.
 *   **Output**: Estimates the derivatives of the safety function: velocity ($\dot{h}$) and acceleration ($\ddot{h}$) of risk.
 
 ### ECBF Governor

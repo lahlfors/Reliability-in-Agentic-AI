@@ -1,18 +1,21 @@
-from google.adk.agents import Agent
-from finguard.tools.execution import BrokerageTool
+# Copyright 2025 Google LLC
+# FinGuard Executor Agent (Refactored for VACP)
+
+from vacp.governed_agent import VACPGovernedAgent
+from finguard.tools.execution import execute_order, get_portfolio
+
+executor_agent = VACPGovernedAgent(
+    name="executor_agent",
+    model="gemini-1.5-pro",
+    instruction="""
+    You are the Trade Executor.
+    You execute approved trades using the `execute_order` tool.
+    You must NOT execute if the trade has not been approved by Compliance.
+    You can check holdings with `get_portfolio`.
+    """,
+    tools=[execute_order, get_portfolio],
+    description="Executor Agent: Executes trades on the brokerage."
+)
 
 def create_executor_agent(model_client=None):
-    """
-    Creates the Executor Agent (The Arm).
-    This is the ONLY agent with 'authorized=True' for the BrokerageTool.
-    """
-    # ZSP: Injecting authorization here.
-    brokerage = BrokerageTool(authorized=True)
-
-    return Agent(
-        name="executor_agent",
-        model="gemini-1.5-pro",
-        instruction="You are the Trade Executor. You execute approved trades. You must NOT execute if the trade has not been approved by Compliance.",
-        tools=[brokerage.execute_order, brokerage.get_portfolio],
-        description="Executor Agent: Executes trades on the brokerage."
-    )
+    return executor_agent

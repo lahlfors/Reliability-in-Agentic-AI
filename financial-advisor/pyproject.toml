@@ -22,6 +22,8 @@ opentelemetry-exporter-otlp = "1.37.0"
 google-cloud-iam = "^2.20.0"
 google-cloud-secret-manager = "^2.25.0"
 google-auth = "^2.43.0"
+opa-python = "^0.0.9"
+pydantic = "^2.12.5"
 
 [tool.poetry.group.dev]
 optional = true

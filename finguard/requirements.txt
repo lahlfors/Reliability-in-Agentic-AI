@@ -1,0 +1,5 @@
+google-cloud-aiplatform
+opa-python
+google-adk>=1.15.1
+pydantic
+python-dotenv

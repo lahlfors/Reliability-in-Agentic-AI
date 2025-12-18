@@ -8,80 +8,64 @@ The system is modeled as a hierarchical control loop where higher-level controll
 *   **Controller 1: Human Supervisor**
     *   **Control Actions:** Define Goals, Set Constraints (Risk Tolerance), Emergency Stop.
     *   **Feedback:** Dashboards, Alerts, Audit Logs (ZK-Proofs).
-*   **Controller 2: Verifiable Agentic Control Plane (VACP)**
-    *   **Control Actions:** TRACK, MONITOR, QUARANTINE (Kill-Switch), **Identity Trade (ZSP Elevation)**.
-    *   **Feedback:** Risk Assessment (AgentGuard), Red Team Analysis (Janus), Constraint Violations.
-*   **Controller 3: VACPGovernedAgent (Host Agent)**
-    *   **Control Actions:** `google_search`, `present_financial_plan`, `place_order`, `execute_python_code`.
+*   **Controller 2: Verifiable Agentic Control Plane (VACP) & FinGuard Supervisor**
+    *   **Control Actions:** TRACK, MONITOR, QUARANTINE (Kill-Switch), **Identity Trade (ZSP Elevation)**, **Vaporwork Halt**.
+    *   **Feedback:** Risk Assessment (AgentGuard), Red Team Analysis (Janus), Constraint Violations (OPA/Rego), Semantic Drift.
+*   **Controller 3: VACPGovernedAgent / FinGuard Workers**
+    *   **Control Actions:** `search_market_news`, `run_python_analysis`, `execute_order`.
     *   **Feedback:** Tool Outputs, Market Data, Execution Status, Error Messages.
 *   **Controlled Process:** The Financial Environment (Market simulation, Network, Compute Resources).
 
 ### 1.2 Feedback Mechanisms
-*   **Tool Gateway:** The VACP Tool Gateway acts as the primary feedback sensor, intercepting all environment interactions.
+*   **Policy Engine (OPA):** The OPA Sidecar acts as a deterministic feedback sensor, intercepting trade proposals and validating them against immutable Rego policy.
+*   **Semantic Guard (Vertex AI):** Measures the "Semantic Velocity" of the agent's thoughts. Low velocity (high similarity) indicates a "Vaporwork" loop.
 *   **System 4 (Derivative Estimator):** Provides predictive feedback on the *future* state of safety constraints ($\dot{h}, \ddot{h}$), enabling anticipatory control.
-*   **AgentGuard:** Provides real-time probabilistic feedback on the likelihood of failure ($P_{max}$).
-*   **Janus:** Provides simulated feedback on potential vulnerabilities in proposed plans.
 
 ## 2. Unsafe Control Actions (UCAs) (Step 3)
 
 We analyze specific Control Actions for potential hazards.
 
 ### Control Action: `place_order(symbol, quantity, action)`
-| UCA Type | Description | Hazard Link |
-| :--- | :--- | :--- |
-| **Type 1: Not Provided** | Agent fails to place a stop-loss order during a market crash. | Financial Loss (L-3) |
-| **Type 2: Provided Incorrectly** | Agent places a BUY order for the wrong symbol or excessive quantity (Fat Finger). | Financial Loss (L-3) |
-| **Type 2: Provided Incorrectly** | Agent executes trade without valid JIT credentials (Bypass Attempt). | Unauthorized Access (H-2) |
-| **Type 3: Wrong Timing** | Agent places order based on stale data (Feedback Delay). | Financial Loss (L-3) |
-| **Type 4: Applied Too Long** | N/A (Atomic action) | |
+| UCA Type | Description | Hazard Link | Control (FinGuard) |
+| :--- | :--- | :--- | :--- |
+| **Type 1: Not Provided** | Agent fails to place a stop-loss order during a market crash. | Financial Loss (L-3) | Supervisory Alerts |
+| **Type 2: Provided Incorrectly** | Agent places a BUY order for a restricted asset (e.g., ESG violation) or exceeds risk limit. | Financial Loss (L-3) | **OPA Policy (Rego)** blocks trade if `amount > limit` or `esg_score < 50`. |
+| **Type 2: Provided Incorrectly** | Agent executes trade without valid JIT credentials (Bypass Attempt). | Unauthorized Access (H-2) | **ZSP Architecture:** Only `ExecutorAgent` has `roles/brokerage.trader`. |
+| **Type 3: Wrong Timing** | Agent places order based on stale data. | Financial Loss (L-3) | Timestamp checks in OPA. |
 
-### Control Action: `execute_python_code(script)`
-| UCA Type | Description | Hazard Link |
-| :--- | :--- | :--- |
-| **Type 1: Not Provided** | Agent fails to calculate risk metrics before trading. | Financial Loss (L-3) |
-| **Type 2: Provided Incorrectly** | Agent executes code with hallucinated dependencies or logic errors. | Mission Failure (L-5) |
-| **Type 3: Wrong Timing** | N/A | |
-| **Type 4: Applied Too Long** | Agent executes an infinite loop or crypto-miner, consuming all compute. | Instrumental Convergence (H-2) |
+### Control Action: `run_python_analysis(code)`
+| UCA Type | Description | Hazard Link | Control (FinGuard) |
+| :--- | :--- | :--- | :--- |
+| **Type 2: Provided Incorrectly** | Agent executes code with malicious system calls (`os.system`). | Mission Failure (L-5) | **Sandboxed Tool:** `PythonSandboxTool` blocks risky imports/calls. |
+| **Type 4: Applied Too Long** | Agent executes an infinite loop or "Vaporwork" (thinking without doing). | Instrumental Convergence (H-2) | **Semantic Guard:** Halts execution if thought similarity > 0.9. |
 
-### Control Action: `google_search(query)`
-| UCA Type | Description | Hazard Link |
-| :--- | :--- | :--- |
-| **Type 2: Provided Incorrectly** | Agent accesses a malicious or non-whitelisted domain (Data Exfiltration). | Data Breach (H-1) |
+### Control Action: `search_market_news(query)`
+| UCA Type | Description | Hazard Link | Control (FinGuard) |
+| :--- | :--- | :--- | :--- |
+| **Type 2: Provided Incorrectly** | Agent accesses a malicious or non-whitelisted domain (Data Exfiltration). | Data Breach (H-1) | Network Allow-list in Cloud Run. |
 
 ## 3. Safety Constraints (Step 4)
 
 Based on the UCAs, we derive the following mandatory engineering constraints enforced by the VACP.
 
 ### Constraint 1: Financial Circuit Breaker (Addressing UCA-Type 2 for `place_order`)
-*   **Constraint:** The Agent must be technically incapable of exceeding a daily drawdown limit of 2% of the portfolio value.
-*   **Implementation:** VACP Tool Gateway "Reference Monitor" checking `place_order` parameters against current portfolio state.
-*   **Upgrade:** ECBF Governor enforces this dynamically by preventing actions that create *momentum* towards the limit (Semantic Inertia).
+*   **Constraint:** The Agent must be technically incapable of exceeding a daily drawdown limit or single trade limit.
+*   **Implementation (FinGuard):** `finguard/policies/trade.rego` defines strict limits (e.g., `< $50,000`). This is enforced by the **ComplianceAgent** before the **Executor** is even invoked.
 
-### Constraint 2: Resource Limiter (Addressing UCA-Type 4 for `execute_python_code`)
-*   **Constraint:** The Agent must be technically incapable of executing a script that runs for longer than 30 seconds or consumes excessive CPU cycles.
-*   **Implementation:** Timeout wrapper in the execution environment, monitored by Janus.
+### Constraint 2: Process Model Inconsistency (Vaporwork)
+*   **Constraint:** The Agent must not enter a state of infinite semantic repetition.
+*   **Implementation (FinGuard):** `SemanticGuard` halts the system if the embedding of the current thought is too similar to the history buffer (Vertex AI).
 
-### Constraint 3: Network Sandbox (Addressing UCA-Type 2 for `google_search` / `request`)
-*   **Constraint:** The Agent must be technically incapable of establishing network connections to non-whitelisted domains.
-*   **Implementation:** Network interceptor in VACP Gateway verifying all outbound URL requests.
-
-### Constraint 4: Data Provenance & PII (Compliance)
-*   **Constraint:** The Agent must only use approved data sources and must not leak PII.
-*   **Implementation:** ANS Data Provenance verification and Telemetry processor scrubbing sensitive fields.
-
-### Constraint 5: Zero Standing Privileges (ZSP) (Addressing UCA-Type 2 for `place_order`)
+### Constraint 3: Zero Standing Privileges (ZSP)
 *   **Constraint:** The Agent must hold **zero** standing permissions to execute trades or access secrets.
-*   **Implementation:**
-    *   **Gateway:** Authenticates request.
-    *   **MIM Service:** Impersonates privileged Service Account (JIT).
-    *   **Secret Manager:** Releases API key only to the JIT identity for a single transaction.
+*   **Implementation (FinGuard):**
+    *   **Topology:** `Coordinator` cannot trade. `Quant` cannot trade.
+    *   **Identity:** Only the `Executor` process runs with the Service Account that has Brokerage API access.
 
-### Constraint 6: Uncontrolled Tool Use (Addressing UCA-Type 2 for all tools)
-*   **Constraint:** The Agent must be technically incapable of calling tools that are not explicitly authorized in its Identity Card (agent.json).
-*   **Implementation:**
-    *   **Mitigated by vacp.governor enforcing constraints defined in agent.json (System 5 Policy).**
-    *   **Agent Card:** Cryptographically verified JSON artifact defining the `tools_allowed` and `tools_denied` lists.
-    *   **Tool Gateway:** Enforces the Allow/Deny lists at the point of tool invocation.
+### Constraint 4: Uncontrolled Tool Use
+*   **Constraint:** The Agent must be technically incapable of calling tools that are not explicitly authorized.
+*   **Implementation (FinGuard):**
+    *   **Star Topology:** Physical separation of tools into distinct agents. The Quant agent *literally* does not have the `execute_order` tool in its context.
 
 ## 4. Verification Evidence
 
@@ -89,7 +73,7 @@ The implementation of the constraints above is verified through the following au
 
 | Constraint | Verification Artifact | Description |
 | :--- | :--- | :--- |
-| **Constraint 6 (Policy)** | `financial-advisor/agent.json` | **Agent Card:** Defines the `tools_denied` list (e.g., blocking `shell_execute`). |
-| **Constraint 6 (Integrity)** | `vacp/c2pa.py` | **C2PA Signer:** Verifies the cryptographic signature of the Agent Card at startup. |
-| **Constraint 6 (Enforcement)** | `verify_safety.py` | **Live Fire Test:** script successfully demonstrates that the Governor blocks `shell_execute` and allows `get_stock_price`. |
-| **Constraint 4 (Observability)** | `financial-advisor/tests/test_agents.py` | **Telemetry Test:** Confirms that blocked actions emit OpenTelemetry spans with `vacp.policy_violation` attributes. |
+| **Constraint 1 (Policy)** | `finguard/policies/trade.rego` | **OPA Policy:** Defines the "Ground Truth" for trade compliance. |
+| **Constraint 1 (Enforcement)** | `finguard/main.py` (Test Case 2) | **Policy Block Test:** Verifies that a restricted trade (OIL_CORP) is blocked by OPA. |
+| **Constraint 2 (Vaporwork)** | `finguard/main.py` (Test Case 3) | **Semantic Guard Test:** Verifies that repetitive thoughts trigger a system HALT. |
+| **Constraint 3 (ZSP/Isolation)** | `finguard/main.py` (Test Case 4) | **Isolation Test:** Verifies that the Quant sandbox blocks malicious code. |

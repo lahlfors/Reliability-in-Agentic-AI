@@ -1,0 +1,9 @@
+__pycache__
+*.pyc
+.git
+.env
+.venv
+poetry.lock
+pyproject.toml
+financial-advisor/.venv
+financial-advisor/__pycache__

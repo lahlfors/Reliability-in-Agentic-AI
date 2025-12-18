@@ -2,9 +2,7 @@
 
 ## Introduction
 
-This guide provides step-by-by-step instructions for setting up and deploying the Financial Advisor agent with the **Verifiable Agentic Control Plane (VACP)**.
-
-The Financial Advisor is a multi-agent system designed to assist with financial analysis. The VACP is an ISO 42001-compliant governance layer that ensures the agent's actions are safe, auditable, and aligned with organizational policy.
+This guide provides step-by-by-step instructions for setting up and deploying the Financial Advisor agent with the **Verifiable Agentic Control Plane (VACP)** and the new **FinGuard Reference Architecture**.
 
 ## Prerequisites
 
@@ -13,6 +11,7 @@ Before you begin, ensure you have the following software installed:
 - **Python 3.11+**
 - **Poetry**: For dependency management.
 - **Google Cloud CLI**: For deploying the agent to Vertex AI and managing IAM.
+- **OPA (Open Policy Agent)**: The binary `opa` must be installed or available in PATH to run FinGuard policies. [Download OPA](https://www.openpolicyagent.org/docs/latest/#running-opa)
 
 ## Installation
 
@@ -22,7 +21,7 @@ Before you begin, ensure you have the following software installed:
    cd adk-samples/python/agents/financial_advisor
    ```
 2. **Install dependencies**:
-   This project uses Poetry to manage dependencies. Run the following command from the `financial-advisor` directory to install them:
+   This project uses Poetry to manage dependencies. Run the following command from the `financial-advisor` directory to install them (this includes dependencies for both legacy and FinGuard):
    ```bash
    cd financial-advisor
    poetry install --with dev,deployment
@@ -68,24 +67,29 @@ We utilize a **Zero Standing Privileges (ZSP)** architecture on Google Cloud. Th
    ```
 
 2. **Application Default Credentials (ADC)**:
-   If running locally, you need to authenticate your user to allow the code to act as the "Source Credential" for the initial impersonation (or use the Gateway SA key if fully simulating).
+   If running locally, you need to authenticate your user to allow the code to act as the "Source Credential" for the initial impersonation.
 
-   For local dev, usually:
    ```bash
    gcloud auth application-default login
    ```
 
 ## Running the System
 
-To run the complete system (Financial Advisor and VACP), use the `deploy_all.py` script from the root of the repository:
+### Option A: Run FinGuard (New Reference Architecture)
+To run the full FinGuard integration test suite (Star Topology + OPA + Semantic Guard):
+
+```bash
+PYTHONPATH=$(pwd) poetry -C financial-advisor run python3 finguard/main.py
+```
+
+### Option B: Run Legacy Financial Advisor
+To run the original web-based agent:
+
 ```bash
 PYTHONPATH=. poetry -C financial-advisor run python3 deploy_all.py
 ```
-This script will start the Financial Advisor web application with the VACP sidecar enabled.
 
 ## Running Tests
-
-To verify that everything is set up correctly, you can run the test suites.
 
 1. **Run VACP (Control Plane) tests**:
    From the root of the repository:
@@ -101,7 +105,7 @@ To verify that everything is set up correctly, you can run the test suites.
 
 ## Agent Card Configuration (ISO 42001)
 
-The system is governed by an **Agent Card** (`agent.json`). This file defines the agent's identity, regulatory compliance, and permitted capabilities.
+The legacy system is governed by an **Agent Card** (`agent.json`). This file defines the agent's identity, regulatory compliance, and permitted capabilities.
 
 ### 1. File Location
 The agent card is located at `financial-advisor/agent.json`.
@@ -112,9 +116,3 @@ Before the system can run securely, the Agent Card must be cryptographically sig
 ```bash
 PYTHONPATH=. poetry -C financial-advisor run python3 verify_safety.py
 ```
-This script acts as a verification tool to ensure:
-1. The card is correctly signed (`agent.json.sig` is generated).
-2. The `CardLoader` can parse the schema.
-3. The `Gateway` enforces the Allow/Deny lists.
-
-**Note:** If the signature is missing or invalid at runtime, the Governing Orchestrator will activate the **Kill Switch** immediately.
